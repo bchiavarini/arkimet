@@ -220,15 +220,13 @@ void parseConfigFile(ConfigFile& cfg, const std::string& fileName)
 
 bool parseConfigFiles(ConfigFile& cfg, const commandline::VectorOption<commandline::String>& files)
 {
-       bool found = false;
-       for (vector<string>::const_iterator i = files.values().begin();
-                       i != files.values().end(); ++i)
-       {
-               parseConfigFile(cfg, *i);
-               //Reader::readConfig(*i, cfg);
-               found = true;
-       }
-       return found;
+    bool found = false;
+    for (const auto& i: files.values())
+    {
+        parseConfigFile(cfg, i);
+        found = true;
+    }
+    return found;
 }
 
 std::set<std::string> parseRestrict(const std::string& str)

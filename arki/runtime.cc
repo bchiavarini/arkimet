@@ -100,20 +100,11 @@ CommandLine::CommandLine(const std::string& name, int mansection)
 	infoOpts = createGroup("Options controlling verbosity");
 	debug = infoOpts->add<BoolOption>("debug", 0, "debug", "", "debug output");
 	verbose = infoOpts->add<BoolOption>("verbose", 0, "verbose", "", "verbose output");
-	status = infoOpts->add<BoolOption>("status", 0, "status", "",
-			"print to standard error a line per every file with a summary of how it was handled");
 
     // Used only if requested
     inputOpts = createGroup("Options controlling input data");
-    cfgfiles = 0; exprfile = 0; qmacro = 0;
-    files = 0; moveok = moveko = movework = 0;
-    copyok = copyko = 0;
-    restr = 0;
-    ignore_duplicates = 0;
-    validate = 0;
 
 	outputOpts = createGroup("Options controlling output style");
-	merged = 0; postproc_data = 0;
 	yaml = outputOpts->add<BoolOption>("yaml", 0, "yaml", "",
 			"dump the metadata as human-readable Yaml records");
 	yaml->longNames.push_back("dump");
@@ -152,16 +143,6 @@ CommandLine::CommandLine(const std::string& name, int mansection)
 			" by origin first, then by reverse timerange, then by reftime."
 			" Default: do not sort");
 
-	dispatchOpts = createGroup("Options controlling dispatching data to datasets");
-	dispatch = dispatchOpts->add< VectorOption<String> >("dispatch", 0, "dispatch", "conffile",
-			"dispatch the data to the datasets described in the "
-			"given configuration file (or a dataset path can also "
-			"be given), then output the metadata of the data that "
-			"has been dispatched (can be specified multiple times)");
-	testdispatch = dispatchOpts->add< VectorOption<String> >("testdispatch", 0, "testdispatch", "conffile",
-			"simulate dispatching the files right after scanning, using the given configuration file "
-			"or dataset directory (can be specified multiple times)");
-
 	postproc_data = inputOpts->add< VectorOption<ExistingFile> >("postproc-data", 0, "postproc-data", "file",
 		"when querying a remote server with postprocessing, upload a file"
 		" to be used by the postprocessor (can be given more than once)");
@@ -174,29 +155,105 @@ CommandLine::~CommandLine()
 	if (output) delete output;
 }
 
-void CommandLine::addScanOptions()
+void ScanOptions::add_to(CommandLine& cmd)
 {
     using namespace arki::utils::commandline;
 
-	files = inputOpts->add<StringOption>("files", 0, "files", "file",
-			"read the list of files to scan from the given file instead of the command line");
-	moveok = inputOpts->add<StringOption>("moveok", 0, "moveok", "directory",
-			"move input files imported successfully to the given directory");
-	moveko = inputOpts->add<StringOption>("moveko", 0, "moveko", "directory",
-			"move input files with problems to the given directory");
-	movework = inputOpts->add<StringOption>("movework", 0, "movework", "directory",
-			"move input files here before opening them. This is useful to "
-			"catch the cases where arki-scan crashes without having a "
-			"chance to handle errors.");
-    copyok = inputOpts->add<StringOption>("copyok", 0, "copyok", "directory",
-            "copy the data from input files that was imported successfully to the given directory");
-    copyko = inputOpts->add<StringOption>("copyko", 0, "copyko", "directory",
-            "copy the data from input files that had problems to the given directory");
-	ignore_duplicates = dispatchOpts->add<BoolOption>("ignore-duplicates", 0, "ignore-duplicates", "",
-			"do not consider the run unsuccessful in case of duplicates");
+    dispatchOpts = cmd.createGroup("Options controlling dispatching data to datasets");
+    dispatch = dispatchOpts->add< VectorOption<String> >("dispatch", 0, "dispatch", "conffile",
+            "dispatch the data to the datasets described in the "
+            "given configuration file (or a dataset path can also "
+            "be given), then output the metadata of the data that "
+            "has been dispatched (can be specified multiple times)");
+    testdispatch = dispatchOpts->add< VectorOption<String> >("testdispatch", 0, "testdispatch", "conffile",
+            "simulate dispatching the files right after scanning, using the given configuration file "
+            "or dataset directory (can be specified multiple times)");
     validate = dispatchOpts->add<StringOption>("validate", 0, "validate", "checks",
             "run the given checks on the input data before dispatching"
             " (comma-separated list; use 'list' to get a list)");
+    ignore_duplicates = dispatchOpts->add<BoolOption>("ignore-duplicates", 0, "ignore-duplicates", "",
+            "do not consider the run unsuccessful in case of duplicates");
+
+    files = dispatchOpts->add<StringOption>("files", 0, "files", "file",
+            "read the list of files to scan from the given file instead of the command line");
+    moveok = dispatchOpts->add<StringOption>("moveok", 0, "moveok", "directory",
+            "move input files imported successfully to the given directory");
+    moveko = dispatchOpts->add<StringOption>("moveko", 0, "moveko", "directory",
+            "move input files with problems to the given directory");
+    movework = dispatchOpts->add<StringOption>("movework", 0, "movework", "directory",
+            "move input files here before opening them. This is useful to "
+            "catch the cases where arki-scan crashes without having a "
+            "chance to handle errors.");
+    copyok = dispatchOpts->add<StringOption>("copyok", 0, "copyok", "directory",
+            "copy the data from input files that was imported successfully to the given directory");
+    copyko = dispatchOpts->add<StringOption>("copyko", 0, "copyko", "directory",
+            "copy the data from input files that had problems to the given directory");
+    status = dispatchOpts->add<BoolOption>("status", 0, "status", "",
+            "print to standard error a line per every file with a summary of how it was handled");
+}
+
+std::unique_ptr<MetadataDispatch> ScanOptions::make_dispatcher(DatasetProcessor& processor)
+{
+    unique_ptr<MetadataDispatch> dispatcher;
+
+    if (dispatch->isSet() && testdispatch->isSet())
+        throw commandline::BadOption("you cannot use --dispatch together with --testdispatch");
+
+    if (!dispatch->isSet() && !testdispatch->isSet())
+    {
+        if (validate->isSet()) throw commandline::BadOption("--validate only makes sense with --dispatch or --testdispatch");
+        if (ignore_duplicates->isSet()) throw commandline::BadOption("--ignore_duplicates only makes sense with --dispatch or --testdispatch");
+        if (files->isSet()) throw commandline::BadOption("--files only makes sense with --dispatch or --testdispatch");
+        if (moveok->isSet()) throw commandline::BadOption("--moveok only makes sense with --dispatch or --testdispatch");
+        if (moveko->isSet()) throw commandline::BadOption("--moveko only makes sense with --dispatch or --testdispatch");
+        if (movework->isSet()) throw commandline::BadOption("--movework only makes sense with --dispatch or --testdispatch");
+        if (copyok->isSet()) throw commandline::BadOption("--copyok only makes sense with --dispatch or --testdispatch");
+        if (copyko->isSet()) throw commandline::BadOption("--copyko only makes sense with --dispatch or --testdispatch");
+        return dispatcher;
+    }
+
+    runtime::readMatcherAliasDatabase();
+
+    if (testdispatch->isSet()) {
+        parseConfigFiles(dispatchInfo, *testdispatch);
+        dispatcher.reset(new MetadataDispatch(dispatchInfo, processor, true));
+    } else {
+        parseConfigFiles(dispatchInfo, *dispatch);
+        dispatcher.reset(new MetadataDispatch(dispatchInfo, processor));
+    }
+
+    dispatcher->reportStatus = status->boolValue();
+    if (ignore_duplicates->boolValue())
+        dispatcher->ignore_duplicates = true;
+
+    if (validate)
+    {
+        const ValidatorRepository& vals = ValidatorRepository::get();
+
+        // Add validators to dispatcher
+        str::Split splitter(validate->stringValue(), ",");
+        for (str::Split::const_iterator iname = splitter.begin();
+                iname != splitter.end(); ++iname)
+        {
+            ValidatorRepository::const_iterator i = vals.find(*iname);
+            if (i == vals.end())
+                throw commandline::BadOption("unknown validator '" + *iname + "'. You can get a list using --validate=list.");
+            dispatcher->dispatcher->add_validator(*(i->second));
+        }
+    }
+
+    if (copyok->isSet())
+        dispatcher->dir_copyok = copyok->stringValue();
+    if (copyko->isSet())
+        dispatcher->dir_copyko = copyko->stringValue();
+
+    return dispatcher;
+}
+
+void CommandLine::addScanOptions()
+{
+    scan = new ScanOptions;
+    scan->add_to(*this);
 }
 
 void CommandLine::addQueryOptions()
@@ -219,10 +276,10 @@ void CommandLine::addQueryOptions()
 
 bool CommandLine::parse(int argc, const char* argv[])
 {
-	add(infoOpts);
-	add(inputOpts);
-	add(outputOpts);
-	add(dispatchOpts);
+    add(infoOpts);
+    add(inputOpts);
+    add(outputOpts);
+    if (scan) add(scan->dispatchOpts);
 
 	if (StandardParserWithManpage::parse(argc, argv))
 		return true;
@@ -232,7 +289,7 @@ bool CommandLine::parse(int argc, const char* argv[])
     if (postprocess->isSet() && targetfile->isSet())
         throw commandline::BadOption("--postprocess conflicts with --targetfile");
     if (postproc_data && postproc_data->isSet() && !postprocess->isSet())
-        throw commandline::BadOption("--upload only makes sense with --postprocess");
+        throw commandline::BadOption("--postproc-data only makes sense with --postprocess");
 
     // Initialize the processor maker
     pmaker.summary = summary->boolValue();
@@ -258,9 +315,9 @@ bool CommandLine::parse(int argc, const char* argv[])
 void CommandLine::setupProcessing()
 {
     // Honour --validate=list
-    if (validate)
+    if (scan && scan->validate)
     {
-        if (validate->stringValue() == "list")
+        if (scan->validate->stringValue() == "list")
         {
             // Print validator list and exit
             const ValidatorRepository& vals = ValidatorRepository::get();
@@ -302,10 +359,10 @@ void CommandLine::setupProcessing()
 				i != cfgfiles->values().end(); ++i)
 			parseConfigFile(inputInfo, *i);
 
-    if (files && files->isSet())    // From --files option, looking for data files or datasets
+    if (scan && scan->files && scan->files->isSet())    // From --files option, looking for data files or datasets
     {
         // Open the file
-        string file = files->stringValue();
+        string file = scan->files->stringValue();
         unique_ptr<NamedFileDescriptor> in;
         if (file != "-")
             in.reset(new InputFile(file));
@@ -427,54 +484,10 @@ void CommandLine::setupProcessing()
         processor = new TargetFileProcessor(sop, targetfile->stringValue());
     }
 
-    // Create the dispatcher if needed
-    if (dispatch->isSet() || testdispatch->isSet())
+    if (scan)
     {
-        if (dispatch->isSet() && testdispatch->isSet())
-            throw commandline::BadOption("you cannot use --dispatch together with --testdispatch");
-        runtime::readMatcherAliasDatabase();
-
-		if (testdispatch->isSet()) {
-			for (vector<string>::const_iterator i = testdispatch->values().begin();
-					i != testdispatch->values().end(); ++i)
-				parseConfigFile(dispatchInfo, *i);
-			dispatcher = new MetadataDispatch(dispatchInfo, *processor, true);
-		} else {
-			for (vector<string>::const_iterator i = dispatch->values().begin();
-					i != dispatch->values().end(); ++i)
-				parseConfigFile(dispatchInfo, *i);
-			dispatcher = new MetadataDispatch(dispatchInfo, *processor);
-		}
-	}
-	if (dispatcher)
-	{
-		dispatcher->reportStatus = status->boolValue();
-		if (ignore_duplicates && ignore_duplicates->boolValue())
-			dispatcher->ignore_duplicates = true;
-
-        if (validate)
-        {
-            const ValidatorRepository& vals = ValidatorRepository::get();
-
-            // Add validators to dispatcher
-            str::Split splitter(validate->stringValue(), ",");
-            for (str::Split::const_iterator iname = splitter.begin();
-                    iname != splitter.end(); ++iname)
-            {
-                ValidatorRepository::const_iterator i = vals.find(*iname);
-                if (i == vals.end())
-                    throw commandline::BadOption("unknown validator '" + *iname + "'. You can get a list using --validate=list.");
-                dispatcher->dispatcher->add_validator(*(i->second));
-            }
-        }
-
-        if (copyok && copyok->isSet())
-            dispatcher->dir_copyok = copyok->stringValue();
-        if (copyko && copyko->isSet())
-            dispatcher->dir_copyko = copyko->stringValue();
-    } else {
-        if (validate && validate->isSet())
-            throw commandline::BadOption("--validate only makes sense with --dispatch or --testdispatch");
+        auto d = scan->make_dispatcher(*processor);
+        if (d) dispatcher = d.release();
     }
 
     if (postproc_data && postproc_data->isSet())
@@ -510,8 +523,8 @@ static std::string moveFile(const dataset::Reader& ds, const std::string& target
 
 std::unique_ptr<dataset::Reader> CommandLine::openSource(ConfigFile& info)
 {
-    if (movework && movework->isSet() && info.value("type") == "file")
-        info.setValue("path", moveFile(info.value("path"), movework->stringValue()));
+    if (scan && scan->movework && scan->movework->isSet() && info.value("type") == "file")
+        info.setValue("path", moveFile(info.value("path"), scan->movework->stringValue()));
 
     return unique_ptr<dataset::Reader>(dataset::Reader::create(info));
 }
@@ -526,17 +539,17 @@ bool CommandLine::processSource(dataset::Reader& ds, const std::string& name)
 
 void CommandLine::closeSource(std::unique_ptr<dataset::Reader> ds, bool successful)
 {
-	if (successful && moveok && moveok->isSet())
-	{
-		moveFile(*ds, moveok->stringValue());
-	}
-	else if (!successful && moveko && moveko->isSet())
-	{
-		moveFile(*ds, moveko->stringValue());
-	}
-	// TODO: print status
+    if (successful && scan && scan->moveok && scan->moveok->isSet())
+    {
+        moveFile(*ds, scan->moveok->stringValue());
+    }
+    else if (!successful && scan && scan->moveko && scan->moveko->isSet())
+    {
+        moveFile(*ds, scan->moveko->stringValue());
+    }
+    // TODO: print status
 
-	// ds will be automatically deallocated here
+    // ds will be automatically deallocated here
 }
 
 MetadataDispatch::MetadataDispatch(const ConfigFile& cfg, DatasetProcessor& next, bool test)
