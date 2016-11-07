@@ -574,6 +574,7 @@ tests_arki_test_SOURCES += \
 		datasets-test.cc \
 		dispatcher-tut.cc \
 		runtime/processor-test.cc \
+		runtime/dispatcher-test.cc \
 		runtime-test.cc
 
 if CURL
@@ -597,6 +598,7 @@ endif
 if DEVEL_DO_RUNTIME
 libarkimet_la_SOURCES += \
 		runtime/processor.cc \
+		runtime/dispatcher.cc \
 		runtime.cc
 endif
 

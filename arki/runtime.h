@@ -14,7 +14,6 @@
 #include <string>
 #include <memory>
 #include <vector>
-#include <sys/time.h>
 
 namespace arki {
 class Summary;

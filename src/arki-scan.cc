@@ -10,37 +10,17 @@
 #include "arki/validator.h"
 #include "arki/dispatcher.h"
 #include "arki/runtime.h"
-#include "arki/nag.h"
+#include "arki/runtime/dispatcher.h"
 #include "config.h"
 #include <memory>
 #include <iostream>
 #include <cstdio>
-#include <sys/types.h>
-#include <sys/stat.h>
-#include <fcntl.h>
-
-#if __xlC__
-// From glibc
-#define timersub(a, b, result)                                                \
-  do {                                                                        \
-    (result)->tv_sec = (a)->tv_sec - (b)->tv_sec;                             \
-    (result)->tv_usec = (a)->tv_usec - (b)->tv_usec;                          \
-    if ((result)->tv_usec < 0) {                                              \
-      --(result)->tv_sec;                                                     \
-      (result)->tv_usec += 1000000;                                           \
-    }                                                                         \
-  } while (0)
-#endif
-
-
 
 using namespace std;
 using namespace arki;
 using namespace arki::utils;
 
 namespace {
-
-struct MetadataDispatch;
 
 static std::string moveFile(const std::string& source, const std::string& targetdir)
 {
@@ -57,76 +37,6 @@ static std::string moveFile(const dataset::Reader& ds, const std::string& target
     else
         return string();
 }
-
-/// Dispatch metadata
-struct MetadataDispatch
-{
-    const ConfigFile& cfg;
-    Dispatcher* dispatcher = nullptr;
-    dataset::Memory results;
-    runtime::DatasetProcessor& next;
-    bool ignore_duplicates = false;
-    bool reportStatus = false;
-
-    // Used for timings. Read with gettimeofday at the beginning of a task,
-    // and summarySoFar will report the elapsed time
-    struct timeval startTime;
-
-    // Incremented when a metadata is imported in the destination dataset.
-    // Feel free to reset it to 0 anytime.
-    int countSuccessful = 0;
-
-    // Incremented when a metadata is imported in the error dataset because it
-    // had already been imported.  Feel free to reset it to 0 anytime.
-    int countDuplicates = 0;
-
-    // Incremented when a metadata is imported in the error dataset.  Feel free
-    // to reset it to 0 anytime.
-    int countInErrorDataset = 0;
-
-    // Incremented when a metadata is not imported at all.  Feel free to reset
-    // it to 0 anytime.
-    int countNotImported = 0;
-
-    /// Directory where we store copyok files
-    std::string dir_copyok;
-
-    /// Directory where we store copyko files
-    std::string dir_copyko;
-
-    /// File to which we send data that was successfully imported
-    std::unique_ptr<arki::File> copyok;
-
-    /// File to which we send data that was not successfully imported
-    std::unique_ptr<arki::File> copyko;
-
-
-    MetadataDispatch(const ConfigFile& cfg, runtime::DatasetProcessor& next, bool test=false);
-    ~MetadataDispatch();
-
-    /**
-     * Dispatch the data from one source
-     *
-     * @returns true if all went well, false if any problem happend.
-     * It can still throw in case of big trouble.
-     */
-    bool process(dataset::Reader& ds, const std::string& name);
-
-    // Flush all imports done so far
-    void flush();
-
-    // Format a summary of the import statistics so far
-    std::string summarySoFar() const;
-
-    // Set startTime to the current time
-    void setStartTime();
-
-protected:
-    bool dispatch(std::unique_ptr<Metadata>&& md);
-
-    void do_copyok(Metadata& md);
-    void do_copyko(Metadata& md);
-};
 
 struct ScanOptions
 {
@@ -149,7 +59,7 @@ struct ScanOptions
     void handle_immediate_commands();
     void add_to(runtime::CommandLine& cmd);
 
-    std::unique_ptr<MetadataDispatch> make_dispatcher(runtime::DatasetProcessor& processor);
+    std::unique_ptr<runtime::MetadataDispatch> make_dispatcher(runtime::DatasetProcessor& processor);
 };
 
 void ScanOptions::add_to(runtime::CommandLine& cmd)
@@ -203,9 +113,9 @@ void ScanOptions::handle_immediate_commands()
     }
 }
 
-std::unique_ptr<MetadataDispatch> ScanOptions::make_dispatcher(runtime::DatasetProcessor& processor)
+std::unique_ptr<runtime::MetadataDispatch> ScanOptions::make_dispatcher(runtime::DatasetProcessor& processor)
 {
-    unique_ptr<MetadataDispatch> dispatcher;
+    unique_ptr<runtime::MetadataDispatch> dispatcher;
 
     if (dispatch->isSet() && testdispatch->isSet())
         throw commandline::BadOption("you cannot use --dispatch together with --testdispatch");
@@ -224,10 +134,10 @@ std::unique_ptr<MetadataDispatch> ScanOptions::make_dispatcher(runtime::DatasetP
 
     if (testdispatch->isSet()) {
         runtime::parseConfigFiles(dispatchInfo, *testdispatch);
-        dispatcher.reset(new MetadataDispatch(dispatchInfo, processor, true));
+        dispatcher.reset(new runtime::MetadataDispatch(dispatchInfo, processor, true));
     } else {
         runtime::parseConfigFiles(dispatchInfo, *dispatch);
-        dispatcher.reset(new MetadataDispatch(dispatchInfo, processor));
+        dispatcher.reset(new runtime::MetadataDispatch(dispatchInfo, processor));
     }
 
     dispatcher->reportStatus = status->boolValue();
@@ -259,177 +169,12 @@ std::unique_ptr<MetadataDispatch> ScanOptions::make_dispatcher(runtime::DatasetP
 }
 
 
-MetadataDispatch::MetadataDispatch(const ConfigFile& cfg, runtime::DatasetProcessor& next, bool test)
-    : cfg(cfg), next(next)
-{
-    timerclear(&startTime);
-
-    if (test)
-        dispatcher = new TestDispatcher(cfg, cerr);
-    else
-        dispatcher = new RealDispatcher(cfg);
-}
-
-MetadataDispatch::~MetadataDispatch()
-{
-    if (dispatcher)
-        delete dispatcher;
-}
-
-bool MetadataDispatch::process(dataset::Reader& ds, const std::string& name)
-{
-    setStartTime();
-    results.clear();
-
-    if (!dir_copyok.empty())
-        copyok.reset(new arki::File(str::joinpath(dir_copyok, str::basename(name)), O_WRONLY | O_APPEND | O_CREAT));
-    else
-        copyok.release();
-
-    if (!dir_copyko.empty())
-        copyko.reset(new arki::File(str::joinpath(dir_copyko, str::basename(name)), O_WRONLY | O_APPEND | O_CREAT));
-    else
-        copyko.release();
-
-    try {
-        ds.query_data(Matcher(), [&](unique_ptr<Metadata> md) { return this->dispatch(move(md)); });
-    } catch (std::exception& e) {
-        // FIXME: this is a quick experiment: a better message can
-        // print some of the stats to document partial imports
-        //cerr << i->second->value("path") << ": import FAILED: " << e.what() << endl;
-        nag::warning("import FAILED: %s", e.what());
-        // Still process what we've got so far
-        next.process(results, name);
-        throw;
-    }
-
-    // Process the resulting annotated metadata as a dataset
-    next.process(results, name);
-
-    if (reportStatus)
-    {
-        cerr << name << ": " << summarySoFar() << endl;
-        cerr.flush();
-    }
-
-    bool success = !(countNotImported || countInErrorDataset);
-    if (ignore_duplicates)
-        success = success && (countSuccessful || countDuplicates);
-    else
-        success = success && (countSuccessful && !countDuplicates);
-
-    flush();
-
-    countSuccessful = 0;
-    countNotImported = 0;
-    countDuplicates = 0;
-    countInErrorDataset = 0;
-
-    return success;
-}
-
-bool MetadataDispatch::dispatch(unique_ptr<Metadata>&& md)
-{
-    // Dispatch to matching dataset
-    switch (dispatcher->dispatch(*md))
-    {
-        case Dispatcher::DISP_OK:
-            do_copyok(*md);
-            ++countSuccessful;
-            break;
-        case Dispatcher::DISP_DUPLICATE_ERROR:
-            do_copyko(*md);
-            ++countDuplicates;
-            break;
-        case Dispatcher::DISP_ERROR:
-            do_copyko(*md);
-            ++countInErrorDataset;
-            break;
-        case Dispatcher::DISP_NOTWRITTEN:
-            do_copyko(*md);
-            // If dispatching failed, add a big note about it.
-            md->add_note("WARNING: The data has not been imported in ANY dataset");
-            ++countNotImported;
-            break;
-    }
-    results.acquire(move(md));
-    return dispatcher->canContinue();
-}
-
-void MetadataDispatch::do_copyok(Metadata& md)
-{
-    if (copyok && copyok->is_open())
-        copyok->write_all_or_throw(md.getData());
-}
-
-void MetadataDispatch::do_copyko(Metadata& md)
-{
-    if (copyko && copyko->is_open())
-        copyko->write_all_or_throw(md.getData());
-}
-
-void MetadataDispatch::flush()
-{
-    if (dispatcher) dispatcher->flush();
-}
-
-string MetadataDispatch::summarySoFar() const
-{
-    string timeinfo;
-    if (timerisset(&startTime))
-    {
-        struct timeval now;
-        struct timeval diff;
-        gettimeofday(&now, NULL);
-        timersub(&now, &startTime, &diff);
-        char buf[32];
-        snprintf(buf, 32, " in %d.%06d seconds", (int)diff.tv_sec, (int)diff.tv_usec);
-        timeinfo = buf;
-    }
-    if (!countSuccessful && !countNotImported && !countDuplicates && !countInErrorDataset)
-        return "no data processed" + timeinfo;
-
-    if (!countNotImported && !countDuplicates && !countInErrorDataset)
-    {
-        stringstream ss;
-        ss << "everything ok: " << countSuccessful << " message";
-        if (countSuccessful != 1)
-            ss << "s";
-        ss << " imported" + timeinfo;
-        return ss.str();
-    }
-
-    stringstream res;
-
-    if (countNotImported)
-        res << "serious problems: ";
-    else
-        res << "some problems: ";
-
-    res << countSuccessful << " ok, "
-        << countDuplicates << " duplicates, "
-        << countInErrorDataset << " in error dataset";
-
-    if (countNotImported)
-        res << ", " << countNotImported << " NOT imported";
-
-    res << timeinfo;
-
-    return res.str();
-}
-
-void MetadataDispatch::setStartTime()
-{
-    gettimeofday(&startTime, NULL);
-}
-
-
 
 
 struct ArkiScan : public runtime::ArkiTool
 {
     ScanOptions scan;
-    MetadataDispatch* dispatcher = nullptr;
+    runtime::MetadataDispatch* dispatcher = nullptr;
 
     ~ArkiScan()
     {
