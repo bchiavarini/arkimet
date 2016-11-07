@@ -35,14 +35,6 @@ struct Options : public arki::runtime::CommandLine
 }
 }
 
-template<typename T>
-struct RAIIArrayDeleter
-{
-	T*& a;
-	RAIIArrayDeleter(T*& a) : a(a) {}
-	~RAIIArrayDeleter() { if (a) delete[] a; }
-};
-
 int main(int argc, const char* argv[])
 {
     commandline::Options opts;
@@ -59,12 +51,7 @@ int main(int argc, const char* argv[])
         {
             dataset::Merged merger;
             size_t dscount = opts.inputInfo.sectionSize();
-
-            // Create an unique_ptr array to take care of memory management
-            // It used to be just: unique_ptr<Reader> datasets[dscount];
-            // but xlC does not seem to like it
-            unique_ptr<dataset::Reader>* datasets = new unique_ptr<dataset::Reader>[dscount];
-            RAIIArrayDeleter< unique_ptr<dataset::Reader> > datasets_mman(datasets);
+            std::vector<unique_ptr<dataset::Reader>> datasets(dscount);
 
 			// Instantiate the datasets and add them to the merger
 			int idx = 0;
