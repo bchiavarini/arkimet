@@ -222,8 +222,6 @@ std::unique_ptr<MetadataDispatch> ScanOptions::make_dispatcher(runtime::DatasetP
         return dispatcher;
     }
 
-    runtime::readMatcherAliasDatabase();
-
     if (testdispatch->isSet()) {
         runtime::parseConfigFiles(dispatchInfo, *testdispatch);
         dispatcher.reset(new MetadataDispatch(dispatchInfo, processor, true));
