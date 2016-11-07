@@ -33,20 +33,6 @@ struct SingleOutputProcessor : public DatasetProcessor
     SingleOutputProcessor(const utils::sys::NamedFileDescriptor& out);
 };
 
-struct TargetFileProcessor : public DatasetProcessor
-{
-    SingleOutputProcessor* next;
-    std::string pattern;
-    std::vector<std::string> description_attrs;
-
-    TargetFileProcessor(SingleOutputProcessor* next, const std::string& pattern);
-    virtual ~TargetFileProcessor();
-
-    virtual std::string describe() const;
-    virtual void process(dataset::Reader& ds, const std::string& name);
-    virtual void end();
-};
-
 struct ProcessorMaker
 {
     bool summary = false;
@@ -61,6 +47,7 @@ struct ProcessorMaker
     bool server_side = false;
     std::string postprocess;
     std::string report;
+    std::string targetfile;
 
     std::string summary_restrict;
     std::string sort;

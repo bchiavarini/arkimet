@@ -191,6 +191,7 @@ void ArkiTool::parse_args(int argc, const char* argv[])
     pmaker.report = args->report->stringValue();
     pmaker.summary_restrict = args->summary_restrict->stringValue();
     pmaker.sort = args->sort->stringValue();
+    pmaker.targetfile = args->targetfile->stringValue();
 
     // Run here a consistency check on the processor maker configuration
     std::string errors = pmaker.verify_option_consistency();
@@ -257,14 +258,6 @@ void ArkiTool::setup_processing()
     // Create the core processor
     unique_ptr<DatasetProcessor> p = pmaker.make(query, *output);
     processor = p.release();
-
-    // If targetfile is requested, wrap with the targetfile processor
-    if (args->targetfile->isSet())
-    {
-        SingleOutputProcessor* sop = dynamic_cast<SingleOutputProcessor*>(processor);
-        assert(sop != nullptr);
-        processor = new TargetFileProcessor(sop, args->targetfile->stringValue());
-    }
 }
 
 void ArkiTool::doneProcessing()

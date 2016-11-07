@@ -399,49 +399,71 @@ struct BinaryProcessor : public SingleOutputProcessor
 };
 
 
-TargetFileProcessor::TargetFileProcessor(SingleOutputProcessor* next, const std::string& pattern)
-    : next(next), pattern(pattern)
+struct TargetFileProcessor : public DatasetProcessor
 {
-    description_attrs.push_back("pattern=" + pattern);
-    description_attrs.push_back("next=" + next->describe());
-}
+    SingleOutputProcessor* next = nullptr;
+    std::string pattern;
+    std::vector<std::string> description_attrs;
 
-TargetFileProcessor::~TargetFileProcessor()
-{
-    if (next) delete next;
-}
+    TargetFileProcessor(std::unique_ptr<DatasetProcessor> next, const std::string& pattern)
+        : pattern(pattern)
+    {
+        SingleOutputProcessor* sop = dynamic_cast<SingleOutputProcessor*>(next.get());
+        if (!sop)
+        {
+            next.release();
+            throw std::runtime_error("programming error: trying to wrap into a TargetFileProcessor something that is not a SingleOutputProcessor");
+        }
+        next.release();
+        this->next = sop;
+        description_attrs.push_back("pattern=" + pattern);
+        description_attrs.push_back("next=" + next->describe());
+    }
+    ~TargetFileProcessor()
+    {
+        delete next;
+    }
 
-std::string TargetFileProcessor::describe() const
-{
-    string res = "targetfile(";
-    res += str::join(", ", description_attrs.begin(), description_attrs.end());
-    res += ")";
-    return res;
-}
+    std::string describe() const override
+    {
+        string res = "targetfile(";
+        res += str::join(", ", description_attrs.begin(), description_attrs.end());
+        res += ")";
+        return res;
+    }
 
-void TargetFileProcessor::process(dataset::Reader& ds, const std::string& name)
-{
-    TargetfileSpy spy(ds, next->output, pattern);
-    next->process(spy, name);
-}
+    void process(dataset::Reader& ds, const std::string& name) override
+    {
+        TargetfileSpy spy(ds, next->output, pattern);
+        next->process(spy, name);
+    }
 
-void TargetFileProcessor::end() { next->end(); }
+    void end() override { next->end(); }
+};
 
 
 std::unique_ptr<DatasetProcessor> ProcessorMaker::make(Matcher query, sys::NamedFileDescriptor& out)
 {
+    unique_ptr<DatasetProcessor> res;
+
     if (data_only || !postprocess.empty()
 #ifdef HAVE_LUA
         || !report.empty()
 #endif
         )
-        return unique_ptr<DatasetProcessor>(new BinaryProcessor(*this, query, out));
+        res.reset(new BinaryProcessor(*this, query, out));
     else if (summary)
-        return unique_ptr<DatasetProcessor>(new SummaryProcessor(*this, query, out));
+        res.reset(new SummaryProcessor(*this, query, out));
     else if (summary_short)
-        return unique_ptr<DatasetProcessor>(new SummaryShortProcessor(*this, query, out));
+        res.reset(new SummaryShortProcessor(*this, query, out));
     else
-        return unique_ptr<DatasetProcessor>(new DataProcessor(*this, query, out, data_inline));
+        res.reset(new DataProcessor(*this, query, out, data_inline));
+
+    // If targetfile is requested, wrap with the targetfile processor
+    if (!targetfile.empty())
+        res.reset(new TargetFileProcessor(move(res), targetfile));
+
+    return res;
 }
 
 std::string ProcessorMaker::verify_option_consistency()
