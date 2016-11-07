@@ -56,7 +56,6 @@ struct ScanOptions
     utils::commandline::OptionGroup* dispatchOpts = nullptr;
     utils::commandline::BoolOption* ignore_duplicates = nullptr;
 
-    utils::commandline::StringOption* files = nullptr;
     utils::commandline::StringOption* moveok = nullptr;
     utils::commandline::StringOption* moveko = nullptr;
     utils::commandline::StringOption* movework = nullptr;
@@ -91,6 +90,7 @@ struct CommandLine : public utils::commandline::StandardParserWithManpage
     utils::commandline::BoolOption* summary = nullptr;
     utils::commandline::BoolOption* summary_short = nullptr;
     utils::commandline::BoolOption* merged = nullptr;
+    utils::commandline::StringOption* files = nullptr;
     utils::commandline::StringOption* restr = nullptr;
     utils::commandline::StringOption* exprfile = nullptr;
     utils::commandline::StringOption* qmacro = nullptr;

@@ -103,6 +103,8 @@ CommandLine::CommandLine(const std::string& name, int mansection)
 
     // Used only if requested
     inputOpts = createGroup("Options controlling input data");
+    files = inputOpts->add<StringOption>("files", 0, "files", "file",
+            "read the list of files to scan from the given file instead of the command line");
 
 	outputOpts = createGroup("Options controlling output style");
 	yaml = outputOpts->add<BoolOption>("yaml", 0, "yaml", "",
@@ -174,8 +176,6 @@ void ScanOptions::add_to(CommandLine& cmd)
     ignore_duplicates = dispatchOpts->add<BoolOption>("ignore-duplicates", 0, "ignore-duplicates", "",
             "do not consider the run unsuccessful in case of duplicates");
 
-    files = dispatchOpts->add<StringOption>("files", 0, "files", "file",
-            "read the list of files to scan from the given file instead of the command line");
     moveok = dispatchOpts->add<StringOption>("moveok", 0, "moveok", "directory",
             "move input files imported successfully to the given directory");
     moveko = dispatchOpts->add<StringOption>("moveko", 0, "moveko", "directory",
@@ -203,7 +203,6 @@ std::unique_ptr<MetadataDispatch> ScanOptions::make_dispatcher(DatasetProcessor&
     {
         if (validate->isSet()) throw commandline::BadOption("--validate only makes sense with --dispatch or --testdispatch");
         if (ignore_duplicates->isSet()) throw commandline::BadOption("--ignore_duplicates only makes sense with --dispatch or --testdispatch");
-        if (files->isSet()) throw commandline::BadOption("--files only makes sense with --dispatch or --testdispatch");
         if (moveok->isSet()) throw commandline::BadOption("--moveok only makes sense with --dispatch or --testdispatch");
         if (moveko->isSet()) throw commandline::BadOption("--moveko only makes sense with --dispatch or --testdispatch");
         if (movework->isSet()) throw commandline::BadOption("--movework only makes sense with --dispatch or --testdispatch");
@@ -359,10 +358,10 @@ void CommandLine::setupProcessing()
 				i != cfgfiles->values().end(); ++i)
 			parseConfigFile(inputInfo, *i);
 
-    if (scan && scan->files && scan->files->isSet())    // From --files option, looking for data files or datasets
+    if (files->isSet())    // From --files option, looking for data files or datasets
     {
         // Open the file
-        string file = scan->files->stringValue();
+        string file = files->stringValue();
         unique_ptr<NamedFileDescriptor> in;
         if (file != "-")
             in.reset(new InputFile(file));
