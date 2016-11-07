@@ -290,6 +290,25 @@ void ArkiTool::close_source(std::unique_ptr<dataset::Reader> ds, bool successful
     // ds will be automatically deallocated here
 }
 
+int ArkiTool::run(int argc, const char* argv[])
+{
+    init();
+    try {
+        parse_args(argc, argv);
+        setup_input_info();
+        setup_processing();
+        return main();
+    } catch (runtime::HandledByCommandLineParser& e) {
+        return e.status;
+    } catch (commandline::BadOption& e) {
+        cerr << e.what() << endl;
+        args->outputHelp(cerr);
+        return 1;
+    } catch (std::exception& e) {
+        cerr << e.what() << endl;
+        return 1;
+    }
+}
+
 }
 }
-// vim:set ts=4 sw=4:

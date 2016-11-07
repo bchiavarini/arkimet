@@ -165,33 +165,23 @@ struct ArkiQuery : public runtime::ArkiTool
     {
         return qopts.parse_query(input_info);
     }
-};
 
-}
-
-int main(int argc, const char* argv[])
-{
-    ArkiQuery tool;
-    tool.init();
-    try {
-        tool.parse_args(argc, argv);
-        tool.setup_input_info();
-        tool.setup_processing();
-
+    int main() override
+    {
         bool all_successful = true;
-        if (tool.qopts.merged->boolValue())
+        if (qopts.merged->boolValue())
         {
             dataset::Merged merger;
-            size_t dscount = tool.input_info.sectionSize();
+            size_t dscount = input_info.sectionSize();
             std::vector<unique_ptr<dataset::Reader>> datasets(dscount);
 
             // Instantiate the datasets and add them to the merger
             int idx = 0;
             string names;
-            for (ConfigFile::const_section_iterator i = tool.input_info.sectionBegin();
-                    i != tool.input_info.sectionEnd(); ++i, ++idx)
+            for (ConfigFile::const_section_iterator i = input_info.sectionBegin();
+                    i != input_info.sectionEnd(); ++i, ++idx)
             {
-                datasets[idx] = tool.open_source(*i->second);
+                datasets[idx] = open_source(*i->second);
                 merger.addDataset(*datasets[idx]);
                 if (names.empty())
                     names = i->first;
@@ -200,49 +190,48 @@ int main(int argc, const char* argv[])
             }
 
             // Perform the query
-            all_successful = tool.process_source(merger, names);
+            all_successful = process_source(merger, names);
 
             for (size_t i = 0; i < dscount; ++i)
-                tool.close_source(move(datasets[i]), all_successful);
-        } else if (tool.qopts.qmacro->isSet()) {
+                close_source(move(datasets[i]), all_successful);
+        } else if (qopts.qmacro->isSet()) {
             // Create the virtual qmacro dataset
             ConfigFile cfg;
             unique_ptr<dataset::Reader> ds = runtime::make_qmacro_dataset(
                     cfg,
-                    tool.input_info,
-                    tool.qopts.qmacro->stringValue(),
-                    tool.qopts.strquery);
+                    input_info,
+                    qopts.qmacro->stringValue(),
+                    qopts.strquery);
 
             // Perform the query
-            all_successful = tool.process_source(*ds, tool.qopts.qmacro->stringValue());
+            all_successful = process_source(*ds, qopts.qmacro->stringValue());
         } else {
             // Query all the datasets in sequence
-            for (ConfigFile::const_section_iterator i = tool.input_info.sectionBegin();
-                    i != tool.input_info.sectionEnd(); ++i)
+            for (ConfigFile::const_section_iterator i = input_info.sectionBegin();
+                    i != input_info.sectionEnd(); ++i)
             {
-                unique_ptr<dataset::Reader> ds = tool.open_source(*i->second);
+                unique_ptr<dataset::Reader> ds = open_source(*i->second);
                 nag::verbose("Processing %s...", i->second->value("path").c_str());
-                bool success = tool.process_source(*ds, i->second->value("path"));
-                tool.close_source(move(ds), success);
+                bool success = process_source(*ds, i->second->value("path"));
+                close_source(move(ds), success);
                 if (!success) all_successful = false;
             }
         }
 
-        tool.doneProcessing();
+        doneProcessing();
 
-		if (all_successful)
-			return 0;
-		else
-			return 2;
-		//return summary.count() > 0 ? 0 : 1;
-    } catch (runtime::HandledByCommandLineParser& e) {
-        return e.status;
-    } catch (commandline::BadOption& e) {
-        cerr << e.what() << endl;
-        tool.args->outputHelp(cerr);
-        return 1;
-	} catch (std::exception& e) {
-		cerr << e.what() << endl;
-		return 1;
-	}
+        if (all_successful)
+            return 0;
+        else
+            return 2;
+        //return summary.count() > 0 ? 0 : 1;
+    }
+};
+
+}
+
+int main(int argc, const char* argv[])
+{
+    ArkiQuery tool;
+    return tool.run(argc, argv);
 }

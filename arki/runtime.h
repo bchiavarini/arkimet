@@ -137,6 +137,12 @@ struct ArkiTool
      * FIXME: --status, as well as a boolean for moveok/moveko
      */
     virtual void close_source(std::unique_ptr<dataset::Reader> ds, bool successful=true);
+
+    /// Main body of the tool
+    virtual int main() = 0;
+
+    /// Initialize and run, returning the return code
+    virtual int run(int argc, const char* argv[]);
 };
 
 }

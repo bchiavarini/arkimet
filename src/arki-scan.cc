@@ -493,28 +493,18 @@ struct ArkiScan : public runtime::ArkiTool
         }
         return ArkiTool::close_source(move(ds), successful);
     }
-};
 
-}
-
-int main(int argc, const char* argv[])
-{
-    ArkiScan tool;
-    tool.init();
-    try {
-        tool.parse_args(argc, argv);
-        tool.setup_input_info();
-        tool.setup_processing();
-
+    int main() override
+    {
         bool all_successful = true;
-        for (ConfigFile::const_section_iterator i = tool.input_info.sectionBegin();
-                i != tool.input_info.sectionEnd(); ++i)
+        for (ConfigFile::const_section_iterator i = input_info.sectionBegin();
+                i != input_info.sectionEnd(); ++i)
         {
-            unique_ptr<dataset::Reader> ds = tool.open_source(*i->second);
+            unique_ptr<dataset::Reader> ds = open_source(*i->second);
 
             bool success = true;
             try {
-                success = tool.process_source(*ds, i->second->value("path"));
+                success = process_source(*ds, i->second->value("path"));
             } catch (std::exception& e) {
                 // FIXME: this is a quick experiment: a better message can
                 // print some of the stats to document partial imports
@@ -522,26 +512,25 @@ int main(int argc, const char* argv[])
                 success = false;
             }
 
-            tool.close_source(move(ds), success);
+            close_source(move(ds), success);
 
             // Take note if something went wrong
             if (!success) all_successful = false;
         }
 
-        tool.doneProcessing();
+        doneProcessing();
 
-		if (all_successful)
-			return 0;
-		else
-			return 2;
-    } catch (runtime::HandledByCommandLineParser& e) {
-        return e.status;
-    } catch (commandline::BadOption& e) {
-        cerr << e.what() << endl;
-        tool.args->outputHelp(cerr);
-        return 1;
-    } catch (std::exception& e) {
-        cerr << e.what() << endl;
-        return 1;
+        if (all_successful)
+            return 0;
+        else
+            return 2;
     }
+};
+
+}
+
+int main(int argc, const char* argv[])
+{
+    ArkiScan tool;
+    return tool.run(argc, argv);
 }
