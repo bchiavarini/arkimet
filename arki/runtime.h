@@ -118,7 +118,6 @@ struct CommandLine : public utils::commandline::StandardParserWithManpage
     QueryOptions* qopts = nullptr;
 
     ConfigFile inputInfo;
-    Matcher query;
     utils::sys::NamedFileDescriptor* output;
     DatasetProcessor* processor;
     MetadataDispatch* dispatcher = nullptr;

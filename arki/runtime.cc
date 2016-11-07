@@ -386,6 +386,8 @@ bool CommandLine::parse(int argc, const char* argv[])
         throw commandline::BadOption("--postprocess conflicts with --targetfile");
     if (postproc_data && postproc_data->isSet() && !postprocess->isSet())
         throw commandline::BadOption("--postproc-data only makes sense with --postprocess");
+    if (summary->isSet() && summary_short->isSet())
+        throw commandline::BadOption("--summary and --summary-short cannot be used together");
 
     // Initialize the processor maker
     pmaker.summary = summary->boolValue();
@@ -448,9 +450,6 @@ void CommandLine::setupProcessing()
     if (inputInfo.sectionSize() == 0)
         throw commandline::BadOption("you need to specify at least one input file or dataset");
 
-    if (summary && summary->isSet() && summary_short && summary_short->isSet())
-        throw commandline::BadOption("--summary and --summary-short cannot be used together");
-
     // Filter the dataset list
     if (qopts && qopts->restr->isSet())
     {
@@ -460,15 +459,7 @@ void CommandLine::setupProcessing()
             throw commandline::BadOption("no accessible datasets found for the given --restrict value");
     }
 
-    // Some things cannot be done when querying multiple datasets at the same time
-    if (inputInfo.sectionSize() > 1 && !dispatcher && !(qopts && qopts->qmacro->isSet()))
-    {
-        if (postprocess->boolValue())
-            throw commandline::BadOption("postprocessing is not possible when querying more than one dataset at the same time");
-        if (report->boolValue())
-            throw commandline::BadOption("reports are not possible when querying more than one dataset at the same time");
-    }
-
+    Matcher query;
 
     // Validate the query with all the servers
     if (qopts)
