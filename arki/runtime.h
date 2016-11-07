@@ -18,13 +18,9 @@
 
 namespace arki {
 class Summary;
-class Dispatcher;
 class Formatter;
-class Targetfile;
-class Validator;
 
 namespace runtime {
-class MetadataDispatch;
 
 /**
  * Initialise the libraries that we use and parse the matcher alias database.
@@ -89,7 +85,6 @@ struct ArkiTool
     ConfigFile input_info;
     utils::sys::NamedFileDescriptor* output = nullptr;
     DatasetProcessor* processor = nullptr;
-    MetadataDispatch* dispatcher = nullptr;
     ProcessorMaker pmaker;
 
     ~ArkiTool();
@@ -131,7 +126,7 @@ struct ArkiTool
      * If everything went perfectly well, returns true, else false. It can
      * still throw an exception if things go wrong.
      */
-    bool processSource(dataset::Reader& ds, const std::string& name);
+    virtual bool process_source(dataset::Reader& ds, const std::string& name);
 
     /**
      * Done working with one data source
@@ -143,77 +138,6 @@ struct ArkiTool
      */
     virtual void close_source(std::unique_ptr<dataset::Reader> ds, bool successful=true);
 };
-
-/// Dispatch metadata
-struct MetadataDispatch
-{
-	const ConfigFile& cfg;
-	Dispatcher* dispatcher;
-    dataset::Memory results;
-	DatasetProcessor& next;
-	bool ignore_duplicates;
-	bool reportStatus;
-
-	// Used for timings. Read with gettimeofday at the beginning of a task,
-	// and summarySoFar will report the elapsed time
-	struct timeval startTime;
-
-	// Incremented when a metadata is imported in the destination dataset.
-	// Feel free to reset it to 0 anytime.
-	int countSuccessful;
-
-	// Incremented when a metadata is imported in the error dataset because it
-	// had already been imported.  Feel free to reset it to 0 anytime.
-	int countDuplicates;
-
-	// Incremented when a metadata is imported in the error dataset.  Feel free
-	// to reset it to 0 anytime.
-	int countInErrorDataset;
-
-	// Incremented when a metadata is not imported at all.  Feel free to reset
-	// it to 0 anytime.
-	int countNotImported;
-
-    /// Directory where we store copyok files
-    std::string dir_copyok;
-
-    /// Directory where we store copyko files
-    std::string dir_copyko;
-
-    /// File to which we send data that was successfully imported
-    std::unique_ptr<arki::File> copyok;
-
-    /// File to which we send data that was not successfully imported
-    std::unique_ptr<arki::File> copyko;
-
-
-    MetadataDispatch(const ConfigFile& cfg, DatasetProcessor& next, bool test=false);
-    ~MetadataDispatch();
-
-    /**
-     * Dispatch the data from one source
-     *
-     * @returns true if all went well, false if any problem happend.
-     * It can still throw in case of big trouble.
-     */
-    bool process(dataset::Reader& ds, const std::string& name);
-
-	// Flush all imports done so far
-	void flush();
-
-	// Format a summary of the import statistics so far
-	std::string summarySoFar() const;
-
-	// Set startTime to the current time
-	void setStartTime();
-
-protected:
-    bool dispatch(std::unique_ptr<Metadata>&& md);
-
-    void do_copyok(Metadata& md);
-    void do_copyko(Metadata& md);
-};
-
 
 }
 }

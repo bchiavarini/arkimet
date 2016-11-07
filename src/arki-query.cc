@@ -200,7 +200,7 @@ int main(int argc, const char* argv[])
             }
 
             // Perform the query
-            all_successful = tool.processSource(merger, names);
+            all_successful = tool.process_source(merger, names);
 
             for (size_t i = 0; i < dscount; ++i)
                 tool.close_source(move(datasets[i]), all_successful);
@@ -214,7 +214,7 @@ int main(int argc, const char* argv[])
                     tool.qopts.strquery);
 
             // Perform the query
-            all_successful = tool.processSource(*ds, tool.qopts.qmacro->stringValue());
+            all_successful = tool.process_source(*ds, tool.qopts.qmacro->stringValue());
         } else {
             // Query all the datasets in sequence
             for (ConfigFile::const_section_iterator i = tool.input_info.sectionBegin();
@@ -222,7 +222,7 @@ int main(int argc, const char* argv[])
             {
                 unique_ptr<dataset::Reader> ds = tool.open_source(*i->second);
                 nag::verbose("Processing %s...", i->second->value("path").c_str());
-                bool success = tool.processSource(*ds, i->second->value("path"));
+                bool success = tool.process_source(*ds, i->second->value("path"));
                 tool.close_source(move(ds), success);
                 if (!success) all_successful = false;
             }
