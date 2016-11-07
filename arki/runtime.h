@@ -49,46 +49,6 @@ struct HandledByCommandLineParser
     ~HandledByCommandLineParser();
 };
 
-struct CommandLine;
-
-struct ScanOptions
-{
-    utils::commandline::OptionGroup* dispatchOpts = nullptr;
-    utils::commandline::BoolOption* ignore_duplicates = nullptr;
-
-    utils::commandline::StringOption* moveok = nullptr;
-    utils::commandline::StringOption* moveko = nullptr;
-    utils::commandline::StringOption* movework = nullptr;
-    utils::commandline::StringOption* copyok = nullptr;
-    utils::commandline::StringOption* copyko = nullptr;
-    utils::commandline::StringOption* validate = nullptr;
-    utils::commandline::BoolOption* status = nullptr;
-
-    utils::commandline::VectorOption<utils::commandline::String>* dispatch = nullptr;
-    utils::commandline::VectorOption<utils::commandline::String>* testdispatch = nullptr;
-
-    ConfigFile dispatchInfo;
-
-    void handle_immediate_commands();
-    void add_to(CommandLine& cmd);
-
-    std::unique_ptr<MetadataDispatch> make_dispatcher(DatasetProcessor& processor);
-};
-
-struct QueryOptions
-{
-    utils::commandline::StringOption* exprfile = nullptr;
-    utils::commandline::BoolOption* merged = nullptr;
-    utils::commandline::StringOption* qmacro = nullptr;
-    utils::commandline::StringOption* restr = nullptr;
-
-    std::string strquery;
-
-    void add_to(CommandLine& cmd);
-    void read_query(utils::commandline::Parser& cmd);
-    Matcher parse_query(ConfigFile& inputInfo);
-};
-
 struct CommandLine : public utils::commandline::StandardParserWithManpage
 {
     utils::commandline::OptionGroup* infoOpts;
@@ -114,46 +74,56 @@ struct CommandLine : public utils::commandline::StandardParserWithManpage
     utils::commandline::VectorOption<utils::commandline::ExistingFile>* postproc_data = nullptr;
     utils::commandline::VectorOption<utils::commandline::String>* cfgfiles = nullptr;
 
-    ScanOptions* scan = nullptr;
-    QueryOptions* qopts = nullptr;
+    CommandLine(const std::string& name, int mansection=1);
+    ~CommandLine();
 
-    ConfigFile inputInfo;
-    utils::sys::NamedFileDescriptor* output;
-    DatasetProcessor* processor;
+    /**
+     * Parse the command line
+     */
+    bool parse(int argc, const char* argv[]);
+};
+
+struct ArkiTool
+{
+    CommandLine* args = nullptr;
+    ConfigFile input_info;
+    utils::sys::NamedFileDescriptor* output = nullptr;
+    DatasetProcessor* processor = nullptr;
     MetadataDispatch* dispatcher = nullptr;
     ProcessorMaker pmaker;
 
-	CommandLine(const std::string& name, int mansection = 1);
-	~CommandLine();
+    ~ArkiTool();
 
-	/// Add scan-type options (--files, --moveok, --movework, --moveko)
-	void addScanOptions();
+    virtual void init();
 
-	/// Add query-type options (--merged, --file, --cfgfiles)
-	void addQueryOptions();
+    virtual CommandLine* make_cmdline_parser() = 0;
 
-	/**
-	 * Parse the command line
-	 */
-	bool parse(int argc, const char* argv[]);
+    // Parse command line
+    virtual void parse_args(int argc, const char* argv[]);
 
-	/**
-	 * Set up processing after the command line has been parsed and
-	 * additional tweaks have been applied
-	 */
-	void setupProcessing();
+    // Build input_info with the list of input sources
+    virtual void setup_input_info();
 
-	/**
-	 * End processing and flush partial data
-	 */
-	void doneProcessing();
+    /**
+     * Set up processing after the command line has been parsed and
+     * additional tweaks have been applied
+     */
+    virtual void setup_processing();
+
+    /// Build the query to filter the input
+    virtual Matcher make_query();
+
+    /**
+     * End processing and flush partial data
+     */
+    void doneProcessing();
 
     /**
      * Open the next data source to process
      *
      * @return the pointer to the datasource, or 0 for no more datasets
      */
-    std::unique_ptr<dataset::Reader> openSource(ConfigFile& info);
+    virtual std::unique_ptr<dataset::Reader> open_source(ConfigFile& info);
 
     /**
      * Process one data source
@@ -171,7 +141,7 @@ struct CommandLine : public utils::commandline::StandardParserWithManpage
      * FIXME: put something that contains a status report instead, for
      * FIXME: --status, as well as a boolean for moveok/moveko
      */
-    void closeSource(std::unique_ptr<dataset::Reader> ds, bool successful = true);
+    virtual void close_source(std::unique_ptr<dataset::Reader> ds, bool successful=true);
 };
 
 /// Dispatch metadata

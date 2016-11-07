@@ -21,7 +21,6 @@
 #include "arki/nag.h"
 #include "arki/iotrace.h"
 #include "arki/types-init.h"
-#include "arki/validator.h"
 #include "arki/utils/sys.h"
 #ifdef HAVE_LUA
 #include "arki/report.h"
@@ -92,8 +91,7 @@ std::unique_ptr<dataset::Reader> make_qmacro_dataset(const ConfigFile& ds_cfg, c
 }
 
 CommandLine::CommandLine(const std::string& name, int mansection)
-    : StandardParserWithManpage(name, PACKAGE_VERSION, mansection, PACKAGE_BUGREPORT),
-      output(0), processor(0), dispatcher(0)
+    : StandardParserWithManpage(name, PACKAGE_VERSION, mansection, PACKAGE_BUGREPORT)
 {
     using namespace arki::utils::commandline;
 
@@ -154,220 +152,6 @@ CommandLine::CommandLine(const std::string& name, int mansection)
 
 CommandLine::~CommandLine()
 {
-	if (dispatcher) delete dispatcher;
-	if (processor) delete processor;
-	if (output) delete output;
-}
-
-void QueryOptions::add_to(CommandLine& cmd)
-{
-    using namespace arki::utils::commandline;
-
-    exprfile = cmd.inputOpts->add<StringOption>("file", 'f', "file", "file",
-        "read the expression from the given file");
-    merged = cmd.outputOpts->add<BoolOption>("merged", 0, "merged", "",
-        "if multiple datasets are given, merge their data and output it in"
-        " reference time order.  Note: sorting does not work when using"
-        " --postprocess, --data or --report");
-    qmacro = cmd.add<StringOption>("qmacro", 0, "qmacro", "name",
-        "run the given query macro instead of a plain query");
-    restr = cmd.add<StringOption>("restrict", 0, "restrict", "names",
-            "restrict operations to only those datasets that allow one of the given (comma separated) names");
-}
-
-void QueryOptions::read_query(utils::commandline::Parser& cmd)
-{
-    if (exprfile->isSet())
-    {
-        // Read the entire file into memory and parse it as an expression
-        strquery = files::read_file(exprfile->stringValue());
-    } else {
-        // Read from the first commandline argument
-        if (!cmd.hasNext())
-        {
-            if (exprfile)
-                throw commandline::BadOption("you need to specify a filter expression or use --" + exprfile->longNames[0]);
-            else
-                throw commandline::BadOption("you need to specify a filter expression");
-        }
-        // And parse it as an expression
-        strquery = cmd.next();
-    }
-}
-
-Matcher QueryOptions::parse_query(ConfigFile& inputInfo)
-{
-    if (qmacro->isSet())
-        return Matcher::parse("");
-
-    // Resolve the query on each server (including the local system, if
-    // queried). If at least one server can expand it, send that
-    // expanded query to all servers. If two servers expand the same
-    // query in different ways, raise an error.
-    set<string> servers_seen;
-    string expanded;
-    string resolved_by;
-    bool first = true;
-    for (ConfigFile::const_section_iterator i = inputInfo.sectionBegin();
-            i != inputInfo.sectionEnd(); ++i)
-    {
-        string server = i->second->value("server");
-        if (servers_seen.find(server) != servers_seen.end()) continue;
-        string got;
-        try {
-            if (server.empty())
-            {
-                got = Matcher::parse(strquery).toStringExpanded();
-                resolved_by = "local system";
-            } else {
-                got = dataset::http::Reader::expandMatcher(strquery, server);
-                resolved_by = server;
-            }
-        } catch (std::exception& e) {
-            // If the server cannot expand the query, we're
-            // ok as we send it expanded. What we are
-            // checking here is that the server does not
-            // have a different idea of the same aliases
-            // that we use
-            continue;
-        }
-        if (!first && got != expanded)
-        {
-            nag::warning("%s expands the query as %s", server.c_str(), got.c_str());
-            nag::warning("%s expands the query as %s", resolved_by.c_str(), expanded.c_str());
-            throw std::runtime_error("cannot check alias consistency: two systems queried disagree about the query alias expansion");
-        } else if (first)
-            expanded = got;
-        first = false;
-    }
-
-    // If no server could expand it, do it anyway locally: either we
-    // can resolve it with local aliases, or we raise an appropriate
-    // error message
-    if (first)
-        expanded = strquery;
-
-    return Matcher::parse(expanded);
-}
-
-void ScanOptions::add_to(CommandLine& cmd)
-{
-    using namespace arki::utils::commandline;
-
-    dispatchOpts = cmd.createGroup("Options controlling dispatching data to datasets");
-    dispatch = dispatchOpts->add< VectorOption<String> >("dispatch", 0, "dispatch", "conffile",
-            "dispatch the data to the datasets described in the "
-            "given configuration file (or a dataset path can also "
-            "be given), then output the metadata of the data that "
-            "has been dispatched (can be specified multiple times)");
-    testdispatch = dispatchOpts->add< VectorOption<String> >("testdispatch", 0, "testdispatch", "conffile",
-            "simulate dispatching the files right after scanning, using the given configuration file "
-            "or dataset directory (can be specified multiple times)");
-    validate = dispatchOpts->add<StringOption>("validate", 0, "validate", "checks",
-            "run the given checks on the input data before dispatching"
-            " (comma-separated list; use 'list' to get a list)");
-    ignore_duplicates = dispatchOpts->add<BoolOption>("ignore-duplicates", 0, "ignore-duplicates", "",
-            "do not consider the run unsuccessful in case of duplicates");
-
-    moveok = dispatchOpts->add<StringOption>("moveok", 0, "moveok", "directory",
-            "move input files imported successfully to the given directory");
-    moveko = dispatchOpts->add<StringOption>("moveko", 0, "moveko", "directory",
-            "move input files with problems to the given directory");
-    movework = dispatchOpts->add<StringOption>("movework", 0, "movework", "directory",
-            "move input files here before opening them. This is useful to "
-            "catch the cases where arki-scan crashes without having a "
-            "chance to handle errors.");
-    copyok = dispatchOpts->add<StringOption>("copyok", 0, "copyok", "directory",
-            "copy the data from input files that was imported successfully to the given directory");
-    copyko = dispatchOpts->add<StringOption>("copyko", 0, "copyko", "directory",
-            "copy the data from input files that had problems to the given directory");
-    status = dispatchOpts->add<BoolOption>("status", 0, "status", "",
-            "print to standard error a line per every file with a summary of how it was handled");
-}
-
-void ScanOptions::handle_immediate_commands()
-{
-    // Honour --validate=list
-    if (validate->stringValue() == "list")
-    {
-        // Print validator list and exit
-        const ValidatorRepository& vals = ValidatorRepository::get();
-        for (ValidatorRepository::const_iterator i = vals.begin();
-                i != vals.end(); ++i)
-        {
-            cout << i->second->name << " - " << i->second->desc << endl;
-        }
-        throw HandledByCommandLineParser();
-    }
-}
-
-std::unique_ptr<MetadataDispatch> ScanOptions::make_dispatcher(DatasetProcessor& processor)
-{
-    unique_ptr<MetadataDispatch> dispatcher;
-
-    if (dispatch->isSet() && testdispatch->isSet())
-        throw commandline::BadOption("you cannot use --dispatch together with --testdispatch");
-
-    if (!dispatch->isSet() && !testdispatch->isSet())
-    {
-        if (validate->isSet()) throw commandline::BadOption("--validate only makes sense with --dispatch or --testdispatch");
-        if (ignore_duplicates->isSet()) throw commandline::BadOption("--ignore_duplicates only makes sense with --dispatch or --testdispatch");
-        if (moveok->isSet()) throw commandline::BadOption("--moveok only makes sense with --dispatch or --testdispatch");
-        if (moveko->isSet()) throw commandline::BadOption("--moveko only makes sense with --dispatch or --testdispatch");
-        if (movework->isSet()) throw commandline::BadOption("--movework only makes sense with --dispatch or --testdispatch");
-        if (copyok->isSet()) throw commandline::BadOption("--copyok only makes sense with --dispatch or --testdispatch");
-        if (copyko->isSet()) throw commandline::BadOption("--copyko only makes sense with --dispatch or --testdispatch");
-        return dispatcher;
-    }
-
-    runtime::readMatcherAliasDatabase();
-
-    if (testdispatch->isSet()) {
-        parseConfigFiles(dispatchInfo, *testdispatch);
-        dispatcher.reset(new MetadataDispatch(dispatchInfo, processor, true));
-    } else {
-        parseConfigFiles(dispatchInfo, *dispatch);
-        dispatcher.reset(new MetadataDispatch(dispatchInfo, processor));
-    }
-
-    dispatcher->reportStatus = status->boolValue();
-    if (ignore_duplicates->boolValue())
-        dispatcher->ignore_duplicates = true;
-
-    if (validate)
-    {
-        const ValidatorRepository& vals = ValidatorRepository::get();
-
-        // Add validators to dispatcher
-        str::Split splitter(validate->stringValue(), ",");
-        for (str::Split::const_iterator iname = splitter.begin();
-                iname != splitter.end(); ++iname)
-        {
-            ValidatorRepository::const_iterator i = vals.find(*iname);
-            if (i == vals.end())
-                throw commandline::BadOption("unknown validator '" + *iname + "'. You can get a list using --validate=list.");
-            dispatcher->dispatcher->add_validator(*(i->second));
-        }
-    }
-
-    if (copyok->isSet())
-        dispatcher->dir_copyok = copyok->stringValue();
-    if (copyko->isSet())
-        dispatcher->dir_copyko = copyko->stringValue();
-
-    return dispatcher;
-}
-
-void CommandLine::addScanOptions()
-{
-    scan = new ScanOptions;
-    scan->add_to(*this);
-}
-
-void CommandLine::addQueryOptions()
-{
-    qopts = new QueryOptions;
-    qopts->add_to(*this);
 }
 
 bool CommandLine::parse(int argc, const char* argv[])
@@ -375,7 +159,6 @@ bool CommandLine::parse(int argc, const char* argv[])
     add(infoOpts);
     add(inputOpts);
     add(outputOpts);
-    if (scan) add(scan->dispatchOpts);
 
 	if (StandardParserWithManpage::parse(argc, argv))
 		return true;
@@ -389,43 +172,56 @@ bool CommandLine::parse(int argc, const char* argv[])
     if (summary->isSet() && summary_short->isSet())
         throw commandline::BadOption("--summary and --summary-short cannot be used together");
 
+    return false;
+}
+
+ArkiTool::~ArkiTool()
+{
+    delete dispatcher;
+    delete processor;
+    delete output;
+    delete args;
+}
+
+void ArkiTool::init()
+{
+    runtime::init();
+    args = make_cmdline_parser();
+}
+
+void ArkiTool::parse_args(int argc, const char* argv[])
+{
+    if (args->parse(argc, argv))
+        throw HandledByCommandLineParser(0);
+
     // Initialize the processor maker
-    pmaker.summary = summary->boolValue();
-    pmaker.summary_short = summary_short->boolValue();
-    pmaker.yaml = yaml->boolValue();
-    pmaker.json = json->boolValue();
-    pmaker.annotate = annotate->boolValue();
-    pmaker.data_only = dataOnly->boolValue();
-    pmaker.data_inline = dataInline->boolValue();
-    pmaker.postprocess = postprocess->stringValue();
-    pmaker.report = report->stringValue();
-    pmaker.summary_restrict = summary_restrict->stringValue();
-    pmaker.sort = sort->stringValue();
+    pmaker.summary = args->summary->boolValue();
+    pmaker.summary_short = args->summary_short->boolValue();
+    pmaker.yaml = args->yaml->boolValue();
+    pmaker.json = args->json->boolValue();
+    pmaker.annotate = args->annotate->boolValue();
+    pmaker.data_only = args->dataOnly->boolValue();
+    pmaker.data_inline = args->dataInline->boolValue();
+    pmaker.postprocess = args->postprocess->stringValue();
+    pmaker.report = args->report->stringValue();
+    pmaker.summary_restrict = args->summary_restrict->stringValue();
+    pmaker.sort = args->sort->stringValue();
 
     // Run here a consistency check on the processor maker configuration
     std::string errors = pmaker.verify_option_consistency();
     if (!errors.empty())
         throw commandline::BadOption(errors);
-
-    return false;
 }
 
-void CommandLine::setupProcessing()
+void ArkiTool::setup_input_info()
 {
-    // Honour --validate=list
-    if (scan) scan->handle_immediate_commands();
-
-    // Parse the matcher query
-    if (qopts) qopts->read_query(*this);
-
     // Initialise the dataset list
+    parseConfigFiles(input_info, *args->cfgfiles);
 
-    parseConfigFiles(inputInfo, *cfgfiles);
-
-    if (files->isSet())    // From --files option, looking for data files or datasets
+    if (args->files->isSet())    // From --files option, looking for data files or datasets
     {
         // Open the file
-        string file = files->stringValue();
+        string file = args->files->stringValue();
         unique_ptr<NamedFileDescriptor> in;
         if (file != "-")
             in.reset(new InputFile(file));
@@ -440,94 +236,64 @@ void CommandLine::setupProcessing()
             line = str::strip(line);
             if (line.empty())
                 continue;
-            dataset::Reader::readConfig(line, inputInfo);
+            dataset::Reader::readConfig(line, input_info);
         }
     }
 
-    while (hasNext()) // From command line arguments, looking for data files or datasets
-        dataset::Reader::readConfig(next(), inputInfo);
+    while (args->hasNext()) // From command line arguments, looking for data files or datasets
+        dataset::Reader::readConfig(args->next(), input_info);
 
-    if (inputInfo.sectionSize() == 0)
+    if (input_info.sectionSize() == 0)
         throw commandline::BadOption("you need to specify at least one input file or dataset");
 
-    // Filter the dataset list
-    if (qopts && qopts->restr->isSet())
-    {
-        Restrict rest(qopts->restr->stringValue());
-        rest.remove_unallowed(inputInfo);
-        if (inputInfo.sectionSize() == 0)
-            throw commandline::BadOption("no accessible datasets found for the given --restrict value");
-    }
+}
 
-    Matcher query;
+Matcher ArkiTool::make_query()
+{
+    return Matcher();
+}
 
-    // Validate the query with all the servers
-    if (qopts)
-        query = qopts->parse_query(inputInfo);
-
+void ArkiTool::setup_processing()
+{
     // Open output stream
-
     if (!output)
-        output = make_output(*outfile).release();
+        output = make_output(*args->outfile).release();
+
+    if (args->postproc_data->isSet())
+    {
+        // Pass files for the postprocessor in the environment
+        string val = str::join(":", args->postproc_data->values().begin(), args->postproc_data->values().end());
+        setenv("ARKI_POSTPROC_FILES", val.c_str(), 1);
+    } else
+        unsetenv("ARKI_POSTPROC_FILES");
+
+    Matcher query = make_query();
 
     // Create the core processor
     unique_ptr<DatasetProcessor> p = pmaker.make(query, *output);
     processor = p.release();
 
     // If targetfile is requested, wrap with the targetfile processor
-    if (targetfile->isSet())
+    if (args->targetfile->isSet())
     {
         SingleOutputProcessor* sop = dynamic_cast<SingleOutputProcessor*>(processor);
         assert(sop != nullptr);
-        processor = new TargetFileProcessor(sop, targetfile->stringValue());
+        processor = new TargetFileProcessor(sop, args->targetfile->stringValue());
     }
-
-    if (scan)
-    {
-        auto d = scan->make_dispatcher(*processor);
-        if (d) dispatcher = d.release();
-    }
-
-    if (postproc_data && postproc_data->isSet())
-    {
-        // Pass files for the postprocessor in the environment
-        string val = str::join(":", postproc_data->values().begin(), postproc_data->values().end());
-        setenv("ARKI_POSTPROC_FILES", val.c_str(), 1);
-    } else
-        unsetenv("ARKI_POSTPROC_FILES");
 }
 
-void CommandLine::doneProcessing()
+void ArkiTool::doneProcessing()
 {
-	if (processor)
-		processor->end();
+    if (processor)
+        processor->end();
 }
 
-static std::string moveFile(const std::string& source, const std::string& targetdir)
+std::unique_ptr<dataset::Reader> ArkiTool::open_source(ConfigFile& info)
 {
-    string targetFile = str::joinpath(targetdir, str::basename(source));
-    if (::rename(source.c_str(), targetFile.c_str()) == -1)
-        throw_system_error ("cannot move " + source + " to " + targetFile);
-    return targetFile;
-}
-
-static std::string moveFile(const dataset::Reader& ds, const std::string& targetdir)
-{
-    if (const dataset::File* d = dynamic_cast<const dataset::File*>(&ds))
-        return moveFile(d->config().pathname, targetdir);
-    else
-        return string();
-}
-
-std::unique_ptr<dataset::Reader> CommandLine::openSource(ConfigFile& info)
-{
-    if (scan && scan->movework && scan->movework->isSet() && info.value("type") == "file")
-        info.setValue("path", moveFile(info.value("path"), scan->movework->stringValue()));
-
     return unique_ptr<dataset::Reader>(dataset::Reader::create(info));
 }
 
-bool CommandLine::processSource(dataset::Reader& ds, const std::string& name)
+bool ArkiTool::processSource(dataset::Reader& ds, const std::string& name)
 {
     if (dispatcher)
         return dispatcher->process(ds, name);
@@ -535,18 +301,9 @@ bool CommandLine::processSource(dataset::Reader& ds, const std::string& name)
     return true;
 }
 
-void CommandLine::closeSource(std::unique_ptr<dataset::Reader> ds, bool successful)
+void ArkiTool::close_source(std::unique_ptr<dataset::Reader> ds, bool successful)
 {
-    if (successful && scan && scan->moveok && scan->moveok->isSet())
-    {
-        moveFile(*ds, scan->moveok->stringValue());
-    }
-    else if (!successful && scan && scan->moveko && scan->moveko->isSet())
-    {
-        moveFile(*ds, scan->moveko->stringValue());
-    }
     // TODO: print status
-
     // ds will be automatically deallocated here
 }
 
