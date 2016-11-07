@@ -175,6 +175,81 @@ void QueryOptions::add_to(CommandLine& cmd)
             "restrict operations to only those datasets that allow one of the given (comma separated) names");
 }
 
+void QueryOptions::read_query(utils::commandline::Parser& cmd)
+{
+    if (exprfile->isSet())
+    {
+        // Read the entire file into memory and parse it as an expression
+        strquery = files::read_file(exprfile->stringValue());
+    } else {
+        // Read from the first commandline argument
+        if (!cmd.hasNext())
+        {
+            if (exprfile)
+                throw commandline::BadOption("you need to specify a filter expression or use --" + exprfile->longNames[0]);
+            else
+                throw commandline::BadOption("you need to specify a filter expression");
+        }
+        // And parse it as an expression
+        strquery = cmd.next();
+    }
+}
+
+Matcher QueryOptions::parse_query(ConfigFile& inputInfo)
+{
+    if (qmacro->isSet())
+        return Matcher::parse("");
+
+    // Resolve the query on each server (including the local system, if
+    // queried). If at least one server can expand it, send that
+    // expanded query to all servers. If two servers expand the same
+    // query in different ways, raise an error.
+    set<string> servers_seen;
+    string expanded;
+    string resolved_by;
+    bool first = true;
+    for (ConfigFile::const_section_iterator i = inputInfo.sectionBegin();
+            i != inputInfo.sectionEnd(); ++i)
+    {
+        string server = i->second->value("server");
+        if (servers_seen.find(server) != servers_seen.end()) continue;
+        string got;
+        try {
+            if (server.empty())
+            {
+                got = Matcher::parse(strquery).toStringExpanded();
+                resolved_by = "local system";
+            } else {
+                got = dataset::http::Reader::expandMatcher(strquery, server);
+                resolved_by = server;
+            }
+        } catch (std::exception& e) {
+            // If the server cannot expand the query, we're
+            // ok as we send it expanded. What we are
+            // checking here is that the server does not
+            // have a different idea of the same aliases
+            // that we use
+            continue;
+        }
+        if (!first && got != expanded)
+        {
+            nag::warning("%s expands the query as %s", server.c_str(), got.c_str());
+            nag::warning("%s expands the query as %s", resolved_by.c_str(), expanded.c_str());
+            throw std::runtime_error("cannot check alias consistency: two systems queried disagree about the query alias expansion");
+        } else if (first)
+            expanded = got;
+        first = false;
+    }
+
+    // If no server could expand it, do it anyway locally: either we
+    // can resolve it with local aliases, or we raise an appropriate
+    // error message
+    if (first)
+        expanded = strquery;
+
+    return Matcher::parse(expanded);
+}
+
 void ScanOptions::add_to(CommandLine& cmd)
 {
     using namespace arki::utils::commandline;
@@ -208,6 +283,22 @@ void ScanOptions::add_to(CommandLine& cmd)
             "copy the data from input files that had problems to the given directory");
     status = dispatchOpts->add<BoolOption>("status", 0, "status", "",
             "print to standard error a line per every file with a summary of how it was handled");
+}
+
+void ScanOptions::handle_immediate_commands()
+{
+    // Honour --validate=list
+    if (validate->stringValue() == "list")
+    {
+        // Print validator list and exit
+        const ValidatorRepository& vals = ValidatorRepository::get();
+        for (ValidatorRepository::const_iterator i = vals.begin();
+                i != vals.end(); ++i)
+        {
+            cout << i->second->name << " - " << i->second->desc << endl;
+        }
+        throw HandledByCommandLineParser();
+    }
 }
 
 std::unique_ptr<MetadataDispatch> ScanOptions::make_dispatcher(DatasetProcessor& processor)
@@ -320,42 +411,10 @@ bool CommandLine::parse(int argc, const char* argv[])
 void CommandLine::setupProcessing()
 {
     // Honour --validate=list
-    if (scan && scan->validate)
-    {
-        if (scan->validate->stringValue() == "list")
-        {
-            // Print validator list and exit
-            const ValidatorRepository& vals = ValidatorRepository::get();
-            for (ValidatorRepository::const_iterator i = vals.begin();
-                    i != vals.end(); ++i)
-            {
-                cout << i->second->name << " - " << i->second->desc << endl;
-            }
-            throw HandledByCommandLineParser();
-        }
-    }
+    if (scan) scan->handle_immediate_commands();
 
     // Parse the matcher query
-    if (qopts)
-    {
-        if (qopts->exprfile->isSet())
-        {
-            // Read the entire file into memory and parse it as an expression
-            strquery = files::read_file(qopts->exprfile->stringValue());
-        } else {
-            // Read from the first commandline argument
-            if (!hasNext())
-            {
-                if (qopts->exprfile)
-                    throw commandline::BadOption("you need to specify a filter expression or use --" + qopts->exprfile->longNames[0]);
-                else
-                    throw commandline::BadOption("you need to specify a filter expression");
-            }
-            // And parse it as an expression
-            strquery = next();
-        }
-    }
-
+    if (qopts) qopts->read_query(*this);
 
     // Initialise the dataset list
 
@@ -383,7 +442,7 @@ void CommandLine::setupProcessing()
         }
     }
 
-    while (hasNext())	// From command line arguments, looking for data files or datasets
+    while (hasNext()) // From command line arguments, looking for data files or datasets
         dataset::Reader::readConfig(next(), inputInfo);
 
     if (inputInfo.sectionSize() == 0)
@@ -413,61 +472,7 @@ void CommandLine::setupProcessing()
 
     // Validate the query with all the servers
     if (qopts)
-    {
-        if (qopts->qmacro->isSet())
-        {
-            query = Matcher::parse("");
-        } else {
-            // Resolve the query on each server (including the local system, if
-            // queried). If at least one server can expand it, send that
-            // expanded query to all servers. If two servers expand the same
-            // query in different ways, raise an error.
-            set<string> servers_seen;
-            string expanded;
-            string resolved_by;
-            bool first = true;
-            for (ConfigFile::const_section_iterator i = inputInfo.sectionBegin();
-                    i != inputInfo.sectionEnd(); ++i)
-            {
-                string server = i->second->value("server");
-                if (servers_seen.find(server) != servers_seen.end()) continue;
-                string got;
-                try {
-                    if (server.empty())
-                    {
-                        got = Matcher::parse(strquery).toStringExpanded();
-                        resolved_by = "local system";
-                    } else {
-                        got = dataset::http::Reader::expandMatcher(strquery, server);
-                        resolved_by = server;
-                    }
-                } catch (std::exception& e) {
-                    // If the server cannot expand the query, we're
-                    // ok as we send it expanded. What we are
-                    // checking here is that the server does not
-                    // have a different idea of the same aliases
-                    // that we use
-                    continue;
-                }
-                if (!first && got != expanded)
-                {
-                    nag::warning("%s expands the query as %s", server.c_str(), got.c_str());
-                    nag::warning("%s expands the query as %s", resolved_by.c_str(), expanded.c_str());
-                    throw std::runtime_error("cannot check alias consistency: two systems queried disagree about the query alias expansion");
-                } else if (first)
-                    expanded = got;
-                first = false;
-            }
-
-            // If no server could expand it, do it anyway locally: either we
-            // can resolve it with local aliases, or we raise an appropriate
-            // error message
-            if (first)
-                expanded = strquery;
-
-            query = Matcher::parse(expanded);
-        }
-    }
+        query = qopts->parse_query(inputInfo);
 
     // Open output stream
 

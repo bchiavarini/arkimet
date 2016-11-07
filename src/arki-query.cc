@@ -79,7 +79,7 @@ int main(int argc, const char* argv[])
                     cfg,
                     opts.inputInfo,
                     opts.qopts->qmacro->stringValue(),
-                    opts.strquery);
+                    opts.qopts->strquery);
 
             // Perform the query
             all_successful = opts.processSource(*ds, opts.qopts->qmacro->stringValue());

@@ -69,6 +69,7 @@ struct ScanOptions
 
     ConfigFile dispatchInfo;
 
+    void handle_immediate_commands();
     void add_to(CommandLine& cmd);
 
     std::unique_ptr<MetadataDispatch> make_dispatcher(DatasetProcessor& processor);
@@ -81,7 +82,11 @@ struct QueryOptions
     utils::commandline::StringOption* qmacro = nullptr;
     utils::commandline::StringOption* restr = nullptr;
 
+    std::string strquery;
+
     void add_to(CommandLine& cmd);
+    void read_query(utils::commandline::Parser& cmd);
+    Matcher parse_query(ConfigFile& inputInfo);
 };
 
 struct CommandLine : public utils::commandline::StandardParserWithManpage
@@ -113,7 +118,6 @@ struct CommandLine : public utils::commandline::StandardParserWithManpage
     QueryOptions* qopts = nullptr;
 
     ConfigFile inputInfo;
-    std::string strquery;
     Matcher query;
     utils::sys::NamedFileDescriptor* output;
     DatasetProcessor* processor;
