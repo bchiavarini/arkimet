@@ -47,7 +47,7 @@ int main(int argc, const char* argv[])
 		opts.setupProcessing();
 
         bool all_successful = true;
-        if (opts.merged->boolValue())
+        if (opts.qopts->merged->boolValue())
         {
             dataset::Merged merger;
             size_t dscount = opts.inputInfo.sectionSize();
@@ -72,17 +72,17 @@ int main(int argc, const char* argv[])
 
             for (size_t i = 0; i < dscount; ++i)
                 opts.closeSource(move(datasets[i]), all_successful);
-        } else if (opts.qmacro->isSet()) {
+        } else if (opts.qopts->qmacro->isSet()) {
             // Create the virtual qmacro dataset
             ConfigFile cfg;
             unique_ptr<dataset::Reader> ds = runtime::make_qmacro_dataset(
                     cfg,
                     opts.inputInfo,
-                    opts.qmacro->stringValue(),
+                    opts.qopts->qmacro->stringValue(),
                     opts.strquery);
 
             // Perform the query
-            all_successful = opts.processSource(*ds, opts.qmacro->stringValue());
+            all_successful = opts.processSource(*ds, opts.qopts->qmacro->stringValue());
         } else {
             // Query all the datasets in sequence
             for (ConfigFile::const_section_iterator i = opts.inputInfo.sectionBegin();

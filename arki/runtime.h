@@ -74,6 +74,16 @@ struct ScanOptions
     std::unique_ptr<MetadataDispatch> make_dispatcher(DatasetProcessor& processor);
 };
 
+struct QueryOptions
+{
+    utils::commandline::StringOption* exprfile = nullptr;
+    utils::commandline::BoolOption* merged = nullptr;
+    utils::commandline::StringOption* qmacro = nullptr;
+    utils::commandline::StringOption* restr = nullptr;
+
+    void add_to(CommandLine& cmd);
+};
+
 struct CommandLine : public utils::commandline::StandardParserWithManpage
 {
     utils::commandline::OptionGroup* infoOpts;
@@ -89,11 +99,7 @@ struct CommandLine : public utils::commandline::StandardParserWithManpage
     utils::commandline::BoolOption* dataOnly = nullptr;
     utils::commandline::BoolOption* summary = nullptr;
     utils::commandline::BoolOption* summary_short = nullptr;
-    utils::commandline::BoolOption* merged = nullptr;
     utils::commandline::StringOption* files = nullptr;
-    utils::commandline::StringOption* restr = nullptr;
-    utils::commandline::StringOption* exprfile = nullptr;
-    utils::commandline::StringOption* qmacro = nullptr;
     utils::commandline::StringOption* outfile = nullptr;
     utils::commandline::StringOption* targetfile = nullptr;
     utils::commandline::StringOption* postprocess = nullptr;
@@ -104,6 +110,7 @@ struct CommandLine : public utils::commandline::StandardParserWithManpage
     utils::commandline::VectorOption<utils::commandline::String>* cfgfiles = nullptr;
 
     ScanOptions* scan = nullptr;
+    QueryOptions* qopts = nullptr;
 
     ConfigFile inputInfo;
     std::string strquery;

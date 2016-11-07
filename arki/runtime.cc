@@ -105,6 +105,8 @@ CommandLine::CommandLine(const std::string& name, int mansection)
     inputOpts = createGroup("Options controlling input data");
     files = inputOpts->add<StringOption>("files", 0, "files", "file",
             "read the list of files to scan from the given file instead of the command line");
+    cfgfiles = inputOpts->add< VectorOption<String> >("config", 'C', "config", "file",
+            "read configuration about input sources from the given file (can be given more than once)");
 
 	outputOpts = createGroup("Options controlling output style");
 	yaml = outputOpts->add<BoolOption>("yaml", 0, "yaml", "",
@@ -155,6 +157,22 @@ CommandLine::~CommandLine()
 	if (dispatcher) delete dispatcher;
 	if (processor) delete processor;
 	if (output) delete output;
+}
+
+void QueryOptions::add_to(CommandLine& cmd)
+{
+    using namespace arki::utils::commandline;
+
+    exprfile = cmd.inputOpts->add<StringOption>("file", 'f', "file", "file",
+        "read the expression from the given file");
+    merged = cmd.outputOpts->add<BoolOption>("merged", 0, "merged", "",
+        "if multiple datasets are given, merge their data and output it in"
+        " reference time order.  Note: sorting does not work when using"
+        " --postprocess, --data or --report");
+    qmacro = cmd.add<StringOption>("qmacro", 0, "qmacro", "name",
+        "run the given query macro instead of a plain query");
+    restr = cmd.add<StringOption>("restrict", 0, "restrict", "names",
+            "restrict operations to only those datasets that allow one of the given (comma separated) names");
 }
 
 void ScanOptions::add_to(CommandLine& cmd)
@@ -257,20 +275,8 @@ void CommandLine::addScanOptions()
 
 void CommandLine::addQueryOptions()
 {
-    using namespace arki::utils::commandline;
-
-	cfgfiles = inputOpts->add< VectorOption<String> >("config", 'C', "config", "file",
-		"read configuration about input sources from the given file (can be given more than once)");
-	exprfile = inputOpts->add<StringOption>("file", 'f', "file", "file",
-		"read the expression from the given file");
-	merged = outputOpts->add<BoolOption>("merged", 0, "merged", "",
-		"if multiple datasets are given, merge their data and output it in"
-		" reference time order.  Note: sorting does not work when using"
-		" --postprocess, --data or --report");
-	qmacro = add<StringOption>("qmacro", 0, "qmacro", "name",
-		"run the given query macro instead of a plain query");
-	restr = add<StringOption>("restrict", 0, "restrict", "names",
-			"restrict operations to only those datasets that allow one of the given (comma separated) names");
+    qopts = new QueryOptions;
+    qopts->add_to(*this);
 }
 
 bool CommandLine::parse(int argc, const char* argv[])
@@ -330,18 +336,18 @@ void CommandLine::setupProcessing()
     }
 
     // Parse the matcher query
-    if (exprfile)
+    if (qopts)
     {
-        if (exprfile->isSet())
+        if (qopts->exprfile->isSet())
         {
             // Read the entire file into memory and parse it as an expression
-            strquery = files::read_file(exprfile->stringValue());
+            strquery = files::read_file(qopts->exprfile->stringValue());
         } else {
             // Read from the first commandline argument
             if (!hasNext())
             {
-                if (exprfile)
-                    throw commandline::BadOption("you need to specify a filter expression or use --"+exprfile->longNames[0]);
+                if (qopts->exprfile)
+                    throw commandline::BadOption("you need to specify a filter expression or use --" + qopts->exprfile->longNames[0]);
                 else
                     throw commandline::BadOption("you need to specify a filter expression");
             }
@@ -351,12 +357,9 @@ void CommandLine::setupProcessing()
     }
 
 
-	// Initialise the dataset list
+    // Initialise the dataset list
 
-	if (cfgfiles)	// From -C options, looking for config files or datasets
-		for (vector<string>::const_iterator i = cfgfiles->values().begin();
-				i != cfgfiles->values().end(); ++i)
-			parseConfigFile(inputInfo, *i);
+    parseConfigFiles(inputInfo, *cfgfiles);
 
     if (files->isSet())    // From --files option, looking for data files or datasets
     {
@@ -390,16 +393,16 @@ void CommandLine::setupProcessing()
         throw commandline::BadOption("--summary and --summary-short cannot be used together");
 
     // Filter the dataset list
-    if (restr && restr->isSet())
+    if (qopts && qopts->restr->isSet())
     {
-        Restrict rest(restr->stringValue());
+        Restrict rest(qopts->restr->stringValue());
         rest.remove_unallowed(inputInfo);
         if (inputInfo.sectionSize() == 0)
             throw commandline::BadOption("no accessible datasets found for the given --restrict value");
     }
 
     // Some things cannot be done when querying multiple datasets at the same time
-    if (inputInfo.sectionSize() > 1 && !dispatcher && !(qmacro && qmacro->isSet()))
+    if (inputInfo.sectionSize() > 1 && !dispatcher && !(qopts && qopts->qmacro->isSet()))
     {
         if (postprocess->boolValue())
             throw commandline::BadOption("postprocessing is not possible when querying more than one dataset at the same time");
@@ -409,9 +412,9 @@ void CommandLine::setupProcessing()
 
 
     // Validate the query with all the servers
-    if (exprfile)
+    if (qopts)
     {
-        if (qmacro && qmacro->isSet())
+        if (qopts->qmacro->isSet())
         {
             query = Matcher::parse("");
         } else {
