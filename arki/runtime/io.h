@@ -32,6 +32,7 @@ struct File : public utils::sys::File
  */
 std::unique_ptr<utils::sys::NamedFileDescriptor> make_input(utils::commandline::Parser& opts);
 std::unique_ptr<utils::sys::NamedFileDescriptor> make_output(utils::commandline::StringOption& opt);
+std::unique_ptr<utils::sys::NamedFileDescriptor> make_output(const std::string& pathname);
 
 
 /**

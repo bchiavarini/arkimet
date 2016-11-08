@@ -228,6 +228,21 @@ void CommandLine::configure(ArkiTool& tool)
     tool.pmaker.summary_restrict = summary_restrict->stringValue();
     tool.pmaker.sort = sort->stringValue();
     tool.pmaker.targetfile = targetfile->stringValue();
+    // Run here a consistency check on the processor maker configuration
+    std::string errors = tool.pmaker.verify_option_consistency();
+    if (!errors.empty())
+        throw commandline::BadOption(errors);
+
+    tool.input_info = get_inputs();
+    tool.set_output(outfile->stringValue());
+
+    if (postproc_data->isSet())
+    {
+        // Pass files for the postprocessor in the environment
+        string val = str::join(":", postproc_data->values().begin(), postproc_data->values().end());
+        setenv("ARKI_POSTPROC_FILES", val.c_str(), 1);
+    } else
+        unsetenv("ARKI_POSTPROC_FILES");
 }
 
 ArkiTool::~ArkiTool()
@@ -236,32 +251,18 @@ ArkiTool::~ArkiTool()
     delete output;
 }
 
+void ArkiTool::set_output(const std::string& pathname)
+{
+    // Open output stream
+    output = make_output(pathname).release();
+}
+
 void ArkiTool::configure(CommandLine& args)
 {
-    // Run here a consistency check on the processor maker configuration
-    std::string errors = pmaker.verify_option_consistency();
-    if (!errors.empty())
-        throw commandline::BadOption(errors);
-
-    input_info = args.get_inputs();
-
-    // Open output stream
-    if (!output)
-        output = make_output(*args.outfile).release();
-
-    if (args.postproc_data->isSet())
-    {
-        // Pass files for the postprocessor in the environment
-        string val = str::join(":", args.postproc_data->values().begin(), args.postproc_data->values().end());
-        setenv("ARKI_POSTPROC_FILES", val.c_str(), 1);
-    } else
-        unsetenv("ARKI_POSTPROC_FILES");
-
     // Create the core processor
     Matcher query = make_query();
     unique_ptr<DatasetProcessor> p = pmaker.make(query, *output);
     processor = p.release();
-
 }
 
 Matcher ArkiTool::make_query()

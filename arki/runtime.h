@@ -98,6 +98,9 @@ struct ArkiTool
 
     ~ArkiTool();
 
+    /// Set the output file name
+    void set_output(const std::string& pathname);
+
     /// Read parsed command line arguments and setup the tool for running
     void configure(CommandLine& args);
 

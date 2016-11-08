@@ -49,6 +49,13 @@ std::unique_ptr<sys::NamedFileDescriptor> make_output(utils::commandline::String
     return unique_ptr<sys::NamedFileDescriptor>(new Stdout);
 }
 
+std::unique_ptr<utils::sys::NamedFileDescriptor> make_output(const std::string& pathname)
+{
+    if (pathname.empty() || pathname == "-")
+        return unique_ptr<sys::NamedFileDescriptor>(new Stdout);
+    return unique_ptr<sys::NamedFileDescriptor>(new File(pathname));
+}
+
 Tempfile::Tempfile() : sys::File(sys::File::mkstemp("arkimet")) {}
 
 Tempfile::~Tempfile()
