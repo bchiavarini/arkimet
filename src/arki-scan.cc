@@ -193,9 +193,9 @@ struct ArkiScan : public runtime::ArkiTool
         return &args;
     }
 
-    void setup_processing() override
+    void configure() override
     {
-        ArkiTool::setup_processing();
+        ArkiTool::configure();
         auto d = args.make_dispatcher(*processor);
         if (d) dispatcher = d.release();
     }

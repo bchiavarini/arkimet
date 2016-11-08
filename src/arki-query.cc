@@ -46,11 +46,8 @@ struct ArkiQueryCommandLine : public runtime::CommandLine
                 "restrict operations to only those datasets that allow one of the given (comma separated) names");
     }
 
-    bool parse(int argc, const char* argv[]) override
+    void parse_positional_args() override
     {
-        if (CommandLine::parse(argc, argv))
-            return true;
-
         // Parse the matcher query
         if (exprfile->isSet())
         {
@@ -68,7 +65,8 @@ struct ArkiQueryCommandLine : public runtime::CommandLine
             // And parse it as an expression
             strquery = next();
         }
-        return false;
+
+        CommandLine::parse_positional_args();
     }
 };
 
@@ -137,9 +135,9 @@ struct ArkiQuery : public runtime::ArkiTool
     }
 
 
-    void setup_input_info() override
+    void configure() override
     {
-        ArkiTool::setup_input_info();
+        ArkiTool::configure();
 
         // Filter the dataset list
         if (args.restr->isSet())

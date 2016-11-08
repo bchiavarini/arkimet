@@ -161,6 +161,12 @@ bool CommandLine::parse(int argc, const char* argv[])
     return false;
 }
 
+void CommandLine::parse_positional_args()
+{
+    while (hasNext()) // From command line arguments, looking for data files or datasets
+        input_args.push_back(next());
+}
+
 ArkiTool::~ArkiTool()
 {
     delete processor;
@@ -177,6 +183,7 @@ void ArkiTool::parse_args(int argc, const char* argv[])
     CommandLine* args = get_cmdline_parser();
     if (args->parse(argc, argv))
         throw HandledByCommandLineParser(0);
+    args->parse_positional_args();
 
     // Initialize the processor maker
     pmaker.summary = args->summary->boolValue();
@@ -198,7 +205,7 @@ void ArkiTool::parse_args(int argc, const char* argv[])
         throw commandline::BadOption(errors);
 }
 
-void ArkiTool::setup_input_info()
+void ArkiTool::configure()
 {
     CommandLine* args = get_cmdline_parser();
 
@@ -227,22 +234,12 @@ void ArkiTool::setup_input_info()
         }
     }
 
-    while (args->hasNext()) // From command line arguments, looking for data files or datasets
-        dataset::Reader::readConfig(args->next(), input_info);
+    // From command line arguments, looking for data files or datasets
+    for (const auto& i: args->input_args)
+        dataset::Reader::readConfig(i, input_info);
 
     if (input_info.sectionSize() == 0)
         throw commandline::BadOption("you need to specify at least one input file or dataset");
-
-}
-
-Matcher ArkiTool::make_query()
-{
-    return Matcher();
-}
-
-void ArkiTool::setup_processing()
-{
-    CommandLine* args = get_cmdline_parser();
 
     // Open output stream
     if (!output)
@@ -261,6 +258,12 @@ void ArkiTool::setup_processing()
     // Create the core processor
     unique_ptr<DatasetProcessor> p = pmaker.make(query, *output);
     processor = p.release();
+
+}
+
+Matcher ArkiTool::make_query()
+{
+    return Matcher();
 }
 
 void ArkiTool::doneProcessing()
@@ -291,8 +294,7 @@ int ArkiTool::run(int argc, const char* argv[])
     init();
     try {
         parse_args(argc, argv);
-        setup_input_info();
-        setup_processing();
+        configure();
         return main();
     } catch (runtime::HandledByCommandLineParser& e) {
         return e.status;

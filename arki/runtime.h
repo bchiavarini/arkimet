@@ -69,6 +69,8 @@ struct CommandLine : public utils::commandline::StandardParserWithManpage
     utils::commandline::VectorOption<utils::commandline::ExistingFile>* postproc_data = nullptr;
     utils::commandline::VectorOption<utils::commandline::String>* cfgfiles = nullptr;
 
+    std::vector<std::string> input_args;
+
     CommandLine(const std::string& name, int mansection=1);
     ~CommandLine();
 
@@ -76,6 +78,8 @@ struct CommandLine : public utils::commandline::StandardParserWithManpage
      * Parse the command line
      */
     bool parse(int argc, const char* argv[]) override;
+
+    virtual void parse_positional_args();
 };
 
 struct ArkiTool
@@ -94,14 +98,8 @@ struct ArkiTool
     // Parse command line
     virtual void parse_args(int argc, const char* argv[]);
 
-    // Build input_info with the list of input sources
-    virtual void setup_input_info();
-
-    /**
-     * Set up processing after the command line has been parsed and
-     * additional tweaks have been applied
-     */
-    virtual void setup_processing();
+    /// Read parsed command line arguments and setup the tool for running
+    virtual void configure();
 
     /// Build the query to filter the input
     virtual Matcher make_query();
