@@ -182,6 +182,9 @@ struct ArkiScan : public runtime::ArkiTool
 {
     ArkiScanCommandLine args;
     runtime::MetadataDispatch* dispatcher = nullptr;
+    std::string moveok;
+    std::string moveko;
+    std::string movework;
 
     ~ArkiScan()
     {
@@ -198,12 +201,15 @@ struct ArkiScan : public runtime::ArkiTool
         ArkiTool::configure(args);
         auto d = args.make_dispatcher(*processor);
         if (d) dispatcher = d.release();
+        moveok = args.moveok->stringValue();
+        moveko = args.moveko->stringValue();
+        movework = args.movework->stringValue();
     }
 
     std::unique_ptr<dataset::Reader> open_source(ConfigFile& info) override
     {
-        if (args.movework->isSet() && info.value("type") == "file")
-            info.setValue("path", moveFile(info.value("path"), args.movework->stringValue()));
+        if (!movework.empty() && info.value("type") == "file")
+            info.setValue("path", moveFile(info.value("path"), movework));
         return ArkiTool::open_source(info);
     }
 
@@ -217,13 +223,13 @@ struct ArkiScan : public runtime::ArkiTool
 
     void close_source(std::unique_ptr<dataset::Reader> ds, bool successful=true) override
     {
-        if (successful && args.moveok->isSet())
+        if (successful && !moveok.empty())
         {
-            moveFile(*ds, args.moveok->stringValue());
+            moveFile(*ds, moveok);
         }
-        else if (!successful && args.moveko->isSet())
+        else if (!successful && !moveko.empty())
         {
-            moveFile(*ds, args.moveko->stringValue());
+            moveFile(*ds, moveko);
         }
         return ArkiTool::close_source(move(ds), successful);
     }
