@@ -24,21 +24,22 @@ public:
 		   const std::string& description = std::string(),
 		   const std::string& longDescription = std::string())
 		: Engine(&m_manager, name, usage, description, longDescription) {}
+    virtual ~Parser() {}
 
-	/**
-	 * Parse the commandline
-	 *
-	 * @returns true if it also took care of performing the action requested by
-	 *   the user, or false if the caller should do it instead.
-	 */
-	bool parse(int argc, const char* argv[])
-	{
-		m_args.clear();
-		for (int i = 1; i < argc; i++)
-			m_args.push_back(argv[i]);
-		parseList(m_args);
-		return false;
-	}
+    /**
+     * Parse the commandline
+     *
+     * @returns true if it also took care of performing the action requested by
+     *   the user, or false if the caller should do it instead.
+     */
+    virtual bool parse(int argc, const char* argv[])
+    {
+        m_args.clear();
+        for (int i = 1; i < argc; i++)
+            m_args.push_back(argv[i]);
+        parseList(m_args);
+        return false;
+    }
 
 	bool hasNext() const { return !m_args.empty(); }
 
@@ -74,7 +75,7 @@ public:
 
 	void outputHelp(std::ostream& out);
 
-	bool parse(int argc, const char* argv[]);
+    bool parse(int argc, const char* argv[]) override;
 
 	OptionGroup* helpGroup;
 	BoolOption* help;
@@ -104,7 +105,7 @@ public:
 				"output the " + name() + " manpage and exit");
 	}
 
-	bool parse(int argc, const char* argv[]);
+    bool parse(int argc, const char* argv[]) override;
 
 	StringOption* manpage;
 };
@@ -129,7 +130,7 @@ public:
 				"about that command.");
 	}
 
-	bool parse(int argc, const char* argv[]);
+    bool parse(int argc, const char* argv[]) override;
 
 	Engine* helpCommand;
 };

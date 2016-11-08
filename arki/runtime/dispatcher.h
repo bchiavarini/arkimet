@@ -14,7 +14,7 @@ struct DatasetProcessor;
 /// Dispatch metadata
 struct MetadataDispatch
 {
-    const ConfigFile& cfg;
+    ConfigFile cfg;
     Dispatcher* dispatcher = nullptr;
     dataset::Memory results;
     runtime::DatasetProcessor& next;

@@ -75,7 +75,7 @@ struct CommandLine : public utils::commandline::StandardParserWithManpage
     /**
      * Parse the command line
      */
-    bool parse(int argc, const char* argv[]);
+    bool parse(int argc, const char* argv[]) override;
 };
 
 struct ArkiTool
