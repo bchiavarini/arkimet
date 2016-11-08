@@ -257,17 +257,10 @@ void ArkiTool::set_output(const std::string& pathname)
     output = make_output(pathname).release();
 }
 
-void ArkiTool::configure(CommandLine& args)
+void ArkiTool::set_query(const std::string& strquery)
 {
-    // Create the core processor
-    Matcher query = make_query();
-    unique_ptr<DatasetProcessor> p = pmaker.make(query, *output);
-    processor = p.release();
-}
-
-Matcher ArkiTool::make_query()
-{
-    return Matcher();
+    this->strquery = strquery;
+    query = Matcher::parse(strquery);
 }
 
 void ArkiTool::doneProcessing()
@@ -291,6 +284,14 @@ void ArkiTool::close_source(std::unique_ptr<dataset::Reader> ds, bool successful
 {
     // TODO: print status
     // ds will be automatically deallocated here
+}
+
+int ArkiTool::main()
+{
+    // Create the core processor
+    unique_ptr<DatasetProcessor> p = pmaker.make(query, *output);
+    processor = p.release();
+    return 0;
 }
 
 }

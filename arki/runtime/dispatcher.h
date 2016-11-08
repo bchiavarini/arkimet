@@ -7,6 +7,7 @@
 namespace arki {
 struct Metadata;
 struct Dispatcher;
+struct Validator;
 
 namespace runtime {
 struct DatasetProcessor;
@@ -17,9 +18,11 @@ struct MetadataDispatch
     ConfigFile cfg;
     Dispatcher* dispatcher = nullptr;
     dataset::Memory results;
-    runtime::DatasetProcessor& next;
+    runtime::DatasetProcessor* next = nullptr;
     bool ignore_duplicates = false;
     bool reportStatus = false;
+    bool test = false;
+    std::vector<const Validator*> validators;
 
     // Used for timings. Read with gettimeofday at the beginning of a task,
     // and summarySoFar will report the elapsed time
@@ -54,8 +57,12 @@ struct MetadataDispatch
     std::unique_ptr<arki::File> copyko;
 
 
-    MetadataDispatch(const ConfigFile& cfg, runtime::DatasetProcessor& next, bool test=false);
+    MetadataDispatch();
     ~MetadataDispatch();
+
+    void add_validator(const std::string& name);
+
+    void init();
 
     /**
      * Dispatch the data from one source

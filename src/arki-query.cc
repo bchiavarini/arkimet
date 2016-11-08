@@ -92,13 +92,12 @@ struct ArkiQueryCommandLine : public runtime::CommandLine
 struct ArkiQuery : public runtime::ArkiTool
 {
     std::string qmacro;
-    bool merged;
-    std::string strquery;
+    bool merged = false;
 
-    Matcher make_query() override
+    void set_query(const std::string& strquery) override
     {
         if (!qmacro.empty())
-            return Matcher::parse("");
+            return ArkiTool::set_query("");
 
         // Resolve the query on each server (including the local system, if
         // queried). If at least one server can expand it, send that
@@ -147,11 +146,13 @@ struct ArkiQuery : public runtime::ArkiTool
         if (first)
             expanded = strquery;
 
-        return Matcher::parse(expanded);
+        return ArkiTool::set_query(expanded);
     }
 
     int main() override
     {
+        ArkiTool::main();
+
         bool all_successful = true;
         if (merged)
         {
@@ -216,7 +217,7 @@ void ArkiQueryCommandLine::configure(ArkiQuery& tool)
     CommandLine::configure(tool);
     tool.qmacro = qmacro->stringValue();
     tool.merged = merged->boolValue();
-    tool.strquery = strquery;
+    tool.set_query(strquery);
 }
 
 }
@@ -229,7 +230,6 @@ int main(int argc, const char* argv[])
         args.parse_all(argc, argv);
         ArkiQuery tool;
         args.configure(tool);
-        tool.configure(args);
         return tool.main();
     } catch (runtime::HandledByCommandLineParser& e) {
         return e.status;

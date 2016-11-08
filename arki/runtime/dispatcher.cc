@@ -2,6 +2,7 @@
 #include "arki/dispatcher.h"
 #include "arki/utils/string.h"
 #include "arki/runtime/processor.h"
+#include "arki/validator.h"
 #include "arki/nag.h"
 #include "config.h"
 #include <sys/time.h>
@@ -29,21 +30,35 @@ using namespace arki::utils;
 namespace arki {
 namespace runtime {
 
-MetadataDispatch::MetadataDispatch(const ConfigFile& cfg, runtime::DatasetProcessor& next, bool test)
-    : cfg(cfg), next(next)
+MetadataDispatch::MetadataDispatch()
 {
     timerclear(&startTime);
-
-    if (test)
-        dispatcher = new TestDispatcher(cfg, cerr);
-    else
-        dispatcher = new RealDispatcher(cfg);
 }
 
 MetadataDispatch::~MetadataDispatch()
 {
     if (dispatcher)
         delete dispatcher;
+}
+
+void MetadataDispatch::add_validator(const std::string& name)
+{
+    const ValidatorRepository& vals = ValidatorRepository::get();
+    ValidatorRepository::const_iterator i = vals.find(name);
+    if (i == vals.end())
+        throw commandline::BadOption("unknown validator '" + name + "'. You can get a list using --validate=list.");
+    validators.push_back(i->second);
+}
+
+void MetadataDispatch::init()
+{
+    if (test)
+        dispatcher = new TestDispatcher(cfg, cerr);
+    else
+        dispatcher = new RealDispatcher(cfg);
+
+    for (const auto& v: validators)
+        dispatcher->add_validator(*v);
 }
 
 bool MetadataDispatch::process(dataset::Reader& ds, const std::string& name)
@@ -69,12 +84,12 @@ bool MetadataDispatch::process(dataset::Reader& ds, const std::string& name)
         //cerr << i->second->value("path") << ": import FAILED: " << e.what() << endl;
         nag::warning("import FAILED: %s", e.what());
         // Still process what we've got so far
-        next.process(results, name);
+        if (next) next->process(results, name);
         throw;
     }
 
     // Process the resulting annotated metadata as a dataset
-    next.process(results, name);
+    if (next) next->process(results, name);
 
     if (reportStatus)
     {

@@ -99,15 +99,6 @@ struct ArkiScanCommandLine : public runtime::CommandLine
             return true;
         }
 
-        return false;
-    }
-
-    std::unique_ptr<runtime::MetadataDispatch> make_dispatcher(runtime::DatasetProcessor& processor)
-    {
-        ConfigFile dispatchInfo;
-
-        unique_ptr<runtime::MetadataDispatch> dispatcher;
-
         if (dispatch->isSet() && testdispatch->isSet())
             throw commandline::BadOption("you cannot use --dispatch together with --testdispatch");
 
@@ -120,43 +111,9 @@ struct ArkiScanCommandLine : public runtime::CommandLine
             if (movework->isSet()) throw commandline::BadOption("--movework only makes sense with --dispatch or --testdispatch");
             if (copyok->isSet()) throw commandline::BadOption("--copyok only makes sense with --dispatch or --testdispatch");
             if (copyko->isSet()) throw commandline::BadOption("--copyko only makes sense with --dispatch or --testdispatch");
-            return dispatcher;
         }
 
-        if (testdispatch->isSet()) {
-            runtime::parseConfigFiles(dispatchInfo, *testdispatch);
-            dispatcher.reset(new runtime::MetadataDispatch(dispatchInfo, processor, true));
-        } else {
-            runtime::parseConfigFiles(dispatchInfo, *dispatch);
-            dispatcher.reset(new runtime::MetadataDispatch(dispatchInfo, processor));
-        }
-
-        dispatcher->reportStatus = status->boolValue();
-        if (ignore_duplicates->boolValue())
-            dispatcher->ignore_duplicates = true;
-
-        if (validate)
-        {
-            const ValidatorRepository& vals = ValidatorRepository::get();
-
-            // Add validators to dispatcher
-            str::Split splitter(validate->stringValue(), ",");
-            for (str::Split::const_iterator iname = splitter.begin();
-                    iname != splitter.end(); ++iname)
-            {
-                ValidatorRepository::const_iterator i = vals.find(*iname);
-                if (i == vals.end())
-                    throw commandline::BadOption("unknown validator '" + *iname + "'. You can get a list using --validate=list.");
-                dispatcher->dispatcher->add_validator(*(i->second));
-            }
-        }
-
-        if (copyok->isSet())
-            dispatcher->dir_copyok = copyok->stringValue();
-        if (copyko->isSet())
-            dispatcher->dir_copyko = copyko->stringValue();
-
-        return dispatcher;
+        return false;
     }
 
     void configure(ArkiScan& tool);
@@ -179,26 +136,13 @@ static std::string moveFile(const dataset::Reader& ds, const std::string& target
 }
 
 
-
-
 struct ArkiScan : public runtime::ArkiTool
 {
-    runtime::MetadataDispatch* dispatcher = nullptr;
+    runtime::MetadataDispatch dispatcher;
+    bool do_dispatch = false;
     std::string moveok;
     std::string moveko;
     std::string movework;
-
-    ~ArkiScan()
-    {
-        delete dispatcher;
-    }
-
-    void configure(ArkiScanCommandLine& args)
-    {
-        ArkiTool::configure(args);
-        auto d = args.make_dispatcher(*processor);
-        if (d) dispatcher = d.release();
-    }
 
     std::unique_ptr<dataset::Reader> open_source(ConfigFile& info) override
     {
@@ -209,8 +153,8 @@ struct ArkiScan : public runtime::ArkiTool
 
     bool process_source(dataset::Reader& ds, const std::string& name) override
     {
-        if (dispatcher)
-            return dispatcher->process(ds, name);
+        if (do_dispatch)
+            return dispatcher.process(ds, name);
         else
             return ArkiTool::process_source(ds, name);
     }
@@ -218,18 +162,22 @@ struct ArkiScan : public runtime::ArkiTool
     void close_source(std::unique_ptr<dataset::Reader> ds, bool successful=true) override
     {
         if (successful && !moveok.empty())
-        {
             moveFile(*ds, moveok);
-        }
         else if (!successful && !moveko.empty())
-        {
             moveFile(*ds, moveko);
-        }
         return ArkiTool::close_source(move(ds), successful);
     }
 
     int main() override
     {
+        ArkiTool::main();
+
+        if (do_dispatch)
+        {
+            dispatcher.next = processor;
+            dispatcher.init();
+        }
+
         bool all_successful = true;
         for (ConfigFile::const_section_iterator i = input_info.sectionBegin();
                 i != input_info.sectionEnd(); ++i)
@@ -267,6 +215,39 @@ void ArkiScanCommandLine::configure(ArkiScan& tool)
     tool.moveok = moveok->stringValue();
     tool.moveko = moveko->stringValue();
     tool.movework = movework->stringValue();
+
+    if (!dispatch->isSet() && !testdispatch->isSet())
+    {
+        tool.do_dispatch = false;
+    } else {
+        tool.do_dispatch = true;
+
+        if (testdispatch->isSet()) {
+            runtime::parseConfigFiles(tool.dispatcher.cfg, *testdispatch);
+            tool.dispatcher.test = true;
+        } else {
+            runtime::parseConfigFiles(tool.dispatcher.cfg, *dispatch);
+            tool.dispatcher.test = false;
+        }
+
+        tool.dispatcher.reportStatus = status->boolValue();
+        if (ignore_duplicates->boolValue())
+            tool.dispatcher.ignore_duplicates = true;
+
+        if (validate)
+        {
+            // Add validators to dispatcher
+            str::Split splitter(validate->stringValue(), ",");
+            for (str::Split::const_iterator iname = splitter.begin();
+                    iname != splitter.end(); ++iname)
+                tool.dispatcher.add_validator(*iname);
+        }
+
+        if (copyok->isSet())
+            tool.dispatcher.dir_copyok = copyok->stringValue();
+        if (copyko->isSet())
+            tool.dispatcher.dir_copyko = copyko->stringValue();
+    }
 }
 
 }
@@ -279,7 +260,6 @@ int main(int argc, const char* argv[])
         args.parse_all(argc, argv);
         ArkiScan tool;
         args.configure(tool);
-        tool.configure(args);
         return tool.main();
     } catch (runtime::HandledByCommandLineParser& e) {
         return e.status;

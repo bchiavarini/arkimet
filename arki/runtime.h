@@ -95,17 +95,16 @@ struct ArkiTool
     utils::sys::NamedFileDescriptor* output = nullptr;
     DatasetProcessor* processor = nullptr;
     ProcessorMaker pmaker;
+    std::string strquery;
+    Matcher query;
 
     ~ArkiTool();
 
     /// Set the output file name
     void set_output(const std::string& pathname);
 
-    /// Read parsed command line arguments and setup the tool for running
-    void configure(CommandLine& args);
-
-    /// Build the query to filter the input
-    virtual Matcher make_query();
+    /// Set the query for filtering output
+    virtual void set_query(const std::string& strquery);
 
     /**
      * End processing and flush partial data
@@ -138,7 +137,7 @@ struct ArkiTool
     virtual void close_source(std::unique_ptr<dataset::Reader> ds, bool successful=true);
 
     /// Main body of the tool
-    virtual int main() = 0;
+    virtual int main();
 };
 
 }
