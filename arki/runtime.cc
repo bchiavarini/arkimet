@@ -167,6 +167,13 @@ void CommandLine::parse_positional_args()
         input_args.push_back(next());
 }
 
+void CommandLine::parse_all(int argc, const char* argv[])
+{
+    if (parse(argc, argv))
+        throw HandledByCommandLineParser(0);
+    parse_positional_args();
+}
+
 ConfigFile CommandLine::get_inputs()
 {
     ConfigFile input_info;
@@ -212,12 +219,9 @@ ArkiTool::~ArkiTool()
     delete output;
 }
 
-void ArkiTool::parse_args(int argc, const char* argv[])
+void ArkiTool::configure()
 {
     CommandLine* args = get_cmdline_parser();
-    if (args->parse(argc, argv))
-        throw HandledByCommandLineParser(0);
-    args->parse_positional_args();
 
     // Initialize the processor maker
     pmaker.summary = args->summary->boolValue();
@@ -237,18 +241,12 @@ void ArkiTool::parse_args(int argc, const char* argv[])
     std::string errors = pmaker.verify_option_consistency();
     if (!errors.empty())
         throw commandline::BadOption(errors);
-}
-
-void ArkiTool::configure()
-{
-    CommandLine* args = get_cmdline_parser();
 
     input_info = args->get_inputs();
 
     // Open output stream
     if (!output)
         output = make_output(*args->outfile).release();
-
 
     if (args->postproc_data->isSet())
     {
@@ -297,7 +295,7 @@ int ArkiTool::run(int argc, const char* argv[])
 {
     runtime::init();
     try {
-        parse_args(argc, argv);
+        get_cmdline_parser()->parse_all(argc, argv);
         configure();
         return main();
     } catch (runtime::HandledByCommandLineParser& e) {

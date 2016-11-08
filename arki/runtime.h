@@ -81,6 +81,8 @@ struct CommandLine : public utils::commandline::StandardParserWithManpage
 
     virtual void parse_positional_args();
 
+    void parse_all(int argc, const char* argv[]);
+
     virtual ConfigFile get_inputs();
 };
 
@@ -94,9 +96,6 @@ struct ArkiTool
     ~ArkiTool();
 
     virtual CommandLine* get_cmdline_parser() = 0;
-
-    // Parse command line
-    virtual void parse_args(int argc, const char* argv[]);
 
     /// Read parsed command line arguments and setup the tool for running
     virtual void configure();
