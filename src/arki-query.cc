@@ -68,6 +68,22 @@ struct ArkiQueryCommandLine : public runtime::CommandLine
 
         CommandLine::parse_positional_args();
     }
+
+    ConfigFile get_inputs() override
+    {
+        ConfigFile cfg = CommandLine::get_inputs();
+
+        // Filter the dataset list
+        if (restr->isSet())
+        {
+            runtime::Restrict rest(restr->stringValue());
+            rest.remove_unallowed(cfg);
+            if (cfg.sectionSize() == 0)
+                throw commandline::BadOption("no accessible datasets found for the given --restrict value");
+        }
+
+        return cfg;
+    }
 };
 
 struct ArkiQuery : public runtime::ArkiTool
@@ -132,21 +148,6 @@ struct ArkiQuery : public runtime::ArkiTool
             expanded = args.strquery;
 
         return Matcher::parse(expanded);
-    }
-
-
-    void configure() override
-    {
-        ArkiTool::configure();
-
-        // Filter the dataset list
-        if (args.restr->isSet())
-        {
-            runtime::Restrict rest(args.restr->stringValue());
-            rest.remove_unallowed(input_info);
-            if (input_info.sectionSize() == 0)
-                throw commandline::BadOption("no accessible datasets found for the given --restrict value");
-        }
     }
 
     Matcher make_query() override

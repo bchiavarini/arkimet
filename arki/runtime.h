@@ -80,6 +80,8 @@ struct CommandLine : public utils::commandline::StandardParserWithManpage
     bool parse(int argc, const char* argv[]) override;
 
     virtual void parse_positional_args();
+
+    virtual ConfigFile get_inputs();
 };
 
 struct ArkiTool

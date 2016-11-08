@@ -167,6 +167,45 @@ void CommandLine::parse_positional_args()
         input_args.push_back(next());
 }
 
+ConfigFile CommandLine::get_inputs()
+{
+    ConfigFile input_info;
+
+    // Initialise the dataset list
+    parseConfigFiles(input_info, *cfgfiles);
+
+    if (files->isSet())    // From --files option, looking for data files or datasets
+    {
+        // Open the file
+        string file = files->stringValue();
+        unique_ptr<NamedFileDescriptor> in;
+        if (file != "-")
+            in.reset(new InputFile(file));
+        else
+            in.reset(new Stdin);
+
+        // Read the content and scan the related files or dataset directories
+        auto reader = LineReader::from_fd(*in);
+        string line;
+        while (reader->getline(line))
+        {
+            line = str::strip(line);
+            if (line.empty())
+                continue;
+            dataset::Reader::readConfig(line, input_info);
+        }
+    }
+
+    // From command line arguments, looking for data files or datasets
+    for (const auto& i: input_args)
+        dataset::Reader::readConfig(i, input_info);
+
+    if (input_info.sectionSize() == 0)
+        throw commandline::BadOption("you need to specify at least one input file or dataset");
+
+    return input_info;
+}
+
 ArkiTool::~ArkiTool()
 {
     delete processor;
@@ -204,41 +243,12 @@ void ArkiTool::configure()
 {
     CommandLine* args = get_cmdline_parser();
 
-    // Initialise the dataset list
-    parseConfigFiles(input_info, *args->cfgfiles);
-
-    if (args->files->isSet())    // From --files option, looking for data files or datasets
-    {
-        // Open the file
-        string file = args->files->stringValue();
-        unique_ptr<NamedFileDescriptor> in;
-        if (file != "-")
-            in.reset(new InputFile(file));
-        else
-            in.reset(new Stdin);
-
-        // Read the content and scan the related files or dataset directories
-        auto reader = LineReader::from_fd(*in);
-        string line;
-        while (reader->getline(line))
-        {
-            line = str::strip(line);
-            if (line.empty())
-                continue;
-            dataset::Reader::readConfig(line, input_info);
-        }
-    }
-
-    // From command line arguments, looking for data files or datasets
-    for (const auto& i: args->input_args)
-        dataset::Reader::readConfig(i, input_info);
-
-    if (input_info.sectionSize() == 0)
-        throw commandline::BadOption("you need to specify at least one input file or dataset");
+    input_info = args->get_inputs();
 
     // Open output stream
     if (!output)
         output = make_output(*args->outfile).release();
+
 
     if (args->postproc_data->isSet())
     {
@@ -248,9 +258,8 @@ void ArkiTool::configure()
     } else
         unsetenv("ARKI_POSTPROC_FILES");
 
-    Matcher query = make_query();
-
     // Create the core processor
+    Matcher query = make_query();
     unique_ptr<DatasetProcessor> p = pmaker.make(query, *output);
     processor = p.release();
 
