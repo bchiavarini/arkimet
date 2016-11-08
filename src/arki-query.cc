@@ -95,7 +95,7 @@ struct ArkiQuery : public runtime::ArkiTool
         return &args;
     }
 
-    Matcher parse_query(ConfigFile& inputInfo)
+    Matcher make_query() override
     {
         if (args.qmacro->isSet())
             return Matcher::parse("");
@@ -108,8 +108,8 @@ struct ArkiQuery : public runtime::ArkiTool
         string expanded;
         string resolved_by;
         bool first = true;
-        for (ConfigFile::const_section_iterator i = inputInfo.sectionBegin();
-                i != inputInfo.sectionEnd(); ++i)
+        for (ConfigFile::const_section_iterator i = input_info.sectionBegin();
+                i != input_info.sectionEnd(); ++i)
         {
             string server = i->second->value("server");
             if (servers_seen.find(server) != servers_seen.end()) continue;
@@ -148,11 +148,6 @@ struct ArkiQuery : public runtime::ArkiTool
             expanded = args.strquery;
 
         return Matcher::parse(expanded);
-    }
-
-    Matcher make_query() override
-    {
-        return parse_query(input_info);
     }
 
     int main() override
