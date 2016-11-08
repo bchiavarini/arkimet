@@ -38,17 +38,6 @@ File::File(const std::string pathname, bool append)
 {
 }
 
-std::unique_ptr<sys::NamedFileDescriptor> make_output(utils::commandline::Parser& opts)
-{
-    if (opts.hasNext())
-    {
-        string pathname = opts.next();
-        if (pathname != "-")
-            return unique_ptr<sys::NamedFileDescriptor>(new File(pathname));
-    }
-    return unique_ptr<sys::NamedFileDescriptor>(new Stdout);
-}
-
 std::unique_ptr<sys::NamedFileDescriptor> make_output(utils::commandline::StringOption& opt)
 {
     if (opt.isSet())

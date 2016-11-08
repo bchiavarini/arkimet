@@ -31,7 +31,6 @@ struct File : public utils::sys::File
  * file name; else use the standard input.
  */
 std::unique_ptr<utils::sys::NamedFileDescriptor> make_input(utils::commandline::Parser& opts);
-std::unique_ptr<utils::sys::NamedFileDescriptor> make_output(utils::commandline::Parser& opts);
 std::unique_ptr<utils::sys::NamedFileDescriptor> make_output(utils::commandline::StringOption& opt);
 
 
