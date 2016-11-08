@@ -23,6 +23,7 @@ struct ArkiQueryCommandLine : public runtime::CommandLine
     utils::commandline::BoolOption* merged = nullptr;
     utils::commandline::StringOption* qmacro = nullptr;
     utils::commandline::StringOption* restr = nullptr;
+    std::string strquery;
 
     ArkiQueryCommandLine() : runtime::CommandLine("arki-query", 1)
     {
@@ -45,12 +46,16 @@ struct ArkiQueryCommandLine : public runtime::CommandLine
                 "restrict operations to only those datasets that allow one of the given (comma separated) names");
     }
 
-    std::string get_query()
+    bool parse(int argc, const char* argv[]) override
     {
+        if (CommandLine::parse(argc, argv))
+            return true;
+
+        // Parse the matcher query
         if (exprfile->isSet())
         {
             // Read the entire file into memory and parse it as an expression
-            return files::read_file(exprfile->stringValue());
+            strquery = files::read_file(exprfile->stringValue());
         } else {
             // Read from the first commandline argument
             if (!hasNext())
@@ -61,26 +66,19 @@ struct ArkiQueryCommandLine : public runtime::CommandLine
                     throw commandline::BadOption("you need to specify a filter expression");
             }
             // And parse it as an expression
-            return next();
+            strquery = next();
         }
+        return false;
     }
 };
 
 struct ArkiQuery : public runtime::ArkiTool
 {
     ArkiQueryCommandLine args;
-    std::string strquery;
 
     ArkiQueryCommandLine* get_cmdline_parser() override
     {
         return &args;
-    }
-
-    void parse_args(int argc, const char* argv[]) override
-    {
-        ArkiTool::parse_args(argc, argv);
-        // Parse the matcher query
-        strquery = args.get_query();
     }
 
     Matcher parse_query(ConfigFile& inputInfo)
@@ -105,10 +103,10 @@ struct ArkiQuery : public runtime::ArkiTool
             try {
                 if (server.empty())
                 {
-                    got = Matcher::parse(strquery).toStringExpanded();
+                    got = Matcher::parse(args.strquery).toStringExpanded();
                     resolved_by = "local system";
                 } else {
-                    got = dataset::http::Reader::expandMatcher(strquery, server);
+                    got = dataset::http::Reader::expandMatcher(args.strquery, server);
                     resolved_by = server;
                 }
             } catch (std::exception& e) {
@@ -133,7 +131,7 @@ struct ArkiQuery : public runtime::ArkiTool
         // can resolve it with local aliases, or we raise an appropriate
         // error message
         if (first)
-            expanded = strquery;
+            expanded = args.strquery;
 
         return Matcher::parse(expanded);
     }
@@ -193,7 +191,7 @@ struct ArkiQuery : public runtime::ArkiTool
                     cfg,
                     input_info,
                     args.qmacro->stringValue(),
-                    strquery);
+                    args.strquery);
 
             // Perform the query
             all_successful = process_source(*ds, args.qmacro->stringValue());
