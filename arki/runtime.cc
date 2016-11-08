@@ -173,11 +173,6 @@ ArkiTool::~ArkiTool()
     delete output;
 }
 
-void ArkiTool::init()
-{
-    runtime::init();
-}
-
 void ArkiTool::parse_args(int argc, const char* argv[])
 {
     CommandLine* args = get_cmdline_parser();
@@ -291,7 +286,7 @@ void ArkiTool::close_source(std::unique_ptr<dataset::Reader> ds, bool successful
 
 int ArkiTool::run(int argc, const char* argv[])
 {
-    init();
+    runtime::init();
     try {
         parse_args(argc, argv);
         configure();
