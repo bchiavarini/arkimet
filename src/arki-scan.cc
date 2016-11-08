@@ -22,6 +22,17 @@ using namespace arki::utils;
 
 namespace {
 
+struct ArkiScanCommandLine : public runtime::CommandLine
+{
+    ArkiScanCommandLine() : runtime::CommandLine("arki-scan", 1)
+    {
+        usage = "[options] [input...]";
+        description =
+            "Read one or more files or datasets and process their data "
+            "or import them in a dataset.";
+    }
+};
+
 static std::string moveFile(const std::string& source, const std::string& targetdir)
 {
     string targetFile = str::joinpath(targetdir, str::basename(source));
@@ -173,27 +184,24 @@ std::unique_ptr<runtime::MetadataDispatch> ScanOptions::make_dispatcher(runtime:
 
 struct ArkiScan : public runtime::ArkiTool
 {
+    ArkiScanCommandLine args;
     ScanOptions scan;
     runtime::MetadataDispatch* dispatcher = nullptr;
+
+    ArkiScan()
+    {
+        scan.add_to(args);
+        args.add(scan.dispatchOpts);
+    }
 
     ~ArkiScan()
     {
         delete dispatcher;
     }
 
-    runtime::CommandLine* make_cmdline_parser() override
+    ArkiScanCommandLine* get_cmdline_parser() override
     {
-        unique_ptr<runtime::CommandLine> parser(new runtime::CommandLine("arki-scan", 1));
-        parser->usage = "[options] [input...]";
-        parser->description =
-            "Read one or more files or datasets and process their data "
-            "or import them in a dataset.";
-
-        scan.add_to(*parser);
-
-        parser->add(scan.dispatchOpts);
-
-        return parser.release();
+        return &args;
     }
 
     void parse_args(int argc, const char* argv[]) override

@@ -165,17 +165,16 @@ ArkiTool::~ArkiTool()
 {
     delete processor;
     delete output;
-    delete args;
 }
 
 void ArkiTool::init()
 {
     runtime::init();
-    args = make_cmdline_parser();
 }
 
 void ArkiTool::parse_args(int argc, const char* argv[])
 {
+    CommandLine* args = get_cmdline_parser();
     if (args->parse(argc, argv))
         throw HandledByCommandLineParser(0);
 
@@ -201,6 +200,8 @@ void ArkiTool::parse_args(int argc, const char* argv[])
 
 void ArkiTool::setup_input_info()
 {
+    CommandLine* args = get_cmdline_parser();
+
     // Initialise the dataset list
     parseConfigFiles(input_info, *args->cfgfiles);
 
@@ -241,6 +242,8 @@ Matcher ArkiTool::make_query()
 
 void ArkiTool::setup_processing()
 {
+    CommandLine* args = get_cmdline_parser();
+
     // Open output stream
     if (!output)
         output = make_output(*args->outfile).release();
@@ -295,7 +298,7 @@ int ArkiTool::run(int argc, const char* argv[])
         return e.status;
     } catch (commandline::BadOption& e) {
         cerr << e.what() << endl;
-        args->outputHelp(cerr);
+        get_cmdline_parser()->outputHelp(cerr);
         return 1;
     } catch (std::exception& e) {
         cerr << e.what() << endl;

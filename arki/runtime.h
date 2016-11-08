@@ -80,7 +80,6 @@ struct CommandLine : public utils::commandline::StandardParserWithManpage
 
 struct ArkiTool
 {
-    CommandLine* args = nullptr;
     ConfigFile input_info;
     utils::sys::NamedFileDescriptor* output = nullptr;
     DatasetProcessor* processor = nullptr;
@@ -90,7 +89,7 @@ struct ArkiTool
 
     virtual void init();
 
-    virtual CommandLine* make_cmdline_parser() = 0;
+    virtual CommandLine* get_cmdline_parser() = 0;
 
     // Parse command line
     virtual void parse_args(int argc, const char* argv[]);
