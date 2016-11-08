@@ -88,15 +88,16 @@ struct ArkiQueryCommandLine : public runtime::CommandLine
 
 struct ArkiQuery : public runtime::ArkiTool
 {
-    ArkiQueryCommandLine args;
     std::string qmacro;
     bool merged;
+    std::string strquery;
 
     void configure(ArkiQueryCommandLine& args)
     {
         ArkiTool::configure(args);
         qmacro = args.qmacro->stringValue();
         merged = args.merged->boolValue();
+        strquery = args.strquery;
     }
 
     Matcher make_query() override
@@ -121,10 +122,10 @@ struct ArkiQuery : public runtime::ArkiTool
             try {
                 if (server.empty())
                 {
-                    got = Matcher::parse(args.strquery).toStringExpanded();
+                    got = Matcher::parse(strquery).toStringExpanded();
                     resolved_by = "local system";
                 } else {
-                    got = dataset::http::Reader::expandMatcher(args.strquery, server);
+                    got = dataset::http::Reader::expandMatcher(strquery, server);
                     resolved_by = server;
                 }
             } catch (std::exception& e) {
@@ -149,7 +150,7 @@ struct ArkiQuery : public runtime::ArkiTool
         // can resolve it with local aliases, or we raise an appropriate
         // error message
         if (first)
-            expanded = args.strquery;
+            expanded = strquery;
 
         return Matcher::parse(expanded);
     }
@@ -189,7 +190,7 @@ struct ArkiQuery : public runtime::ArkiTool
                     cfg,
                     input_info,
                     qmacro,
-                    args.strquery);
+                    strquery);
 
             // Perform the query
             all_successful = process_source(*ds, qmacro);
@@ -221,16 +222,17 @@ struct ArkiQuery : public runtime::ArkiTool
 int main(int argc, const char* argv[])
 {
     runtime::init();
-    ArkiQuery tool;
+    ArkiQueryCommandLine args;
     try {
-        tool.args.parse_all(argc, argv);
-        tool.configure(tool.args);
+        args.parse_all(argc, argv);
+        ArkiQuery tool;
+        tool.configure(args);
         return tool.main();
     } catch (runtime::HandledByCommandLineParser& e) {
         return e.status;
     } catch (commandline::BadOption& e) {
         cerr << e.what() << endl;
-        tool.args.outputHelp(cerr);
+        args.outputHelp(cerr);
         return 1;
     } catch (std::exception& e) {
         cerr << e.what() << endl;
