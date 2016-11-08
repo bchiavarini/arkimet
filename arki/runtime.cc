@@ -219,39 +219,37 @@ ArkiTool::~ArkiTool()
     delete output;
 }
 
-void ArkiTool::configure()
+void ArkiTool::configure(CommandLine& args)
 {
-    CommandLine* args = get_cmdline_parser();
-
     // Initialize the processor maker
-    pmaker.summary = args->summary->boolValue();
-    pmaker.summary_short = args->summary_short->boolValue();
-    pmaker.yaml = args->yaml->boolValue();
-    pmaker.json = args->json->boolValue();
-    pmaker.annotate = args->annotate->boolValue();
-    pmaker.data_only = args->dataOnly->boolValue();
-    pmaker.data_inline = args->dataInline->boolValue();
-    pmaker.postprocess = args->postprocess->stringValue();
-    pmaker.report = args->report->stringValue();
-    pmaker.summary_restrict = args->summary_restrict->stringValue();
-    pmaker.sort = args->sort->stringValue();
-    pmaker.targetfile = args->targetfile->stringValue();
+    pmaker.summary = args.summary->boolValue();
+    pmaker.summary_short = args.summary_short->boolValue();
+    pmaker.yaml = args.yaml->boolValue();
+    pmaker.json = args.json->boolValue();
+    pmaker.annotate = args.annotate->boolValue();
+    pmaker.data_only = args.dataOnly->boolValue();
+    pmaker.data_inline = args.dataInline->boolValue();
+    pmaker.postprocess = args.postprocess->stringValue();
+    pmaker.report = args.report->stringValue();
+    pmaker.summary_restrict = args.summary_restrict->stringValue();
+    pmaker.sort = args.sort->stringValue();
+    pmaker.targetfile = args.targetfile->stringValue();
 
     // Run here a consistency check on the processor maker configuration
     std::string errors = pmaker.verify_option_consistency();
     if (!errors.empty())
         throw commandline::BadOption(errors);
 
-    input_info = args->get_inputs();
+    input_info = args.get_inputs();
 
     // Open output stream
     if (!output)
-        output = make_output(*args->outfile).release();
+        output = make_output(*args.outfile).release();
 
-    if (args->postproc_data->isSet())
+    if (args.postproc_data->isSet())
     {
         // Pass files for the postprocessor in the environment
-        string val = str::join(":", args->postproc_data->values().begin(), args->postproc_data->values().end());
+        string val = str::join(":", args.postproc_data->values().begin(), args.postproc_data->values().end());
         setenv("ARKI_POSTPROC_FILES", val.c_str(), 1);
     } else
         unsetenv("ARKI_POSTPROC_FILES");
@@ -289,25 +287,6 @@ void ArkiTool::close_source(std::unique_ptr<dataset::Reader> ds, bool successful
 {
     // TODO: print status
     // ds will be automatically deallocated here
-}
-
-int ArkiTool::run(int argc, const char* argv[])
-{
-    runtime::init();
-    try {
-        get_cmdline_parser()->parse_all(argc, argv);
-        configure();
-        return main();
-    } catch (runtime::HandledByCommandLineParser& e) {
-        return e.status;
-    } catch (commandline::BadOption& e) {
-        cerr << e.what() << endl;
-        get_cmdline_parser()->outputHelp(cerr);
-        return 1;
-    } catch (std::exception& e) {
-        cerr << e.what() << endl;
-        return 1;
-    }
 }
 
 }

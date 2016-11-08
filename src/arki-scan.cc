@@ -193,9 +193,9 @@ struct ArkiScan : public runtime::ArkiTool
         return &args;
     }
 
-    void configure() override
+    void configure(ArkiScanCommandLine& args)
     {
-        ArkiTool::configure();
+        ArkiTool::configure(args);
         auto d = args.make_dispatcher(*processor);
         if (d) dispatcher = d.release();
     }
@@ -265,6 +265,20 @@ struct ArkiScan : public runtime::ArkiTool
 
 int main(int argc, const char* argv[])
 {
+    runtime::init();
     ArkiScan tool;
-    return tool.run(argc, argv);
+    try {
+        tool.args.parse_all(argc, argv);
+        tool.configure(tool.args);
+        return tool.main();
+    } catch (runtime::HandledByCommandLineParser& e) {
+        return e.status;
+    } catch (commandline::BadOption& e) {
+        cerr << e.what() << endl;
+        tool.args.outputHelp(cerr);
+        return 1;
+    } catch (std::exception& e) {
+        cerr << e.what() << endl;
+        return 1;
+    }
 }

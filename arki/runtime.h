@@ -98,7 +98,7 @@ struct ArkiTool
     virtual CommandLine* get_cmdline_parser() = 0;
 
     /// Read parsed command line arguments and setup the tool for running
-    virtual void configure();
+    void configure(CommandLine& args);
 
     /// Build the query to filter the input
     virtual Matcher make_query();
@@ -135,9 +135,6 @@ struct ArkiTool
 
     /// Main body of the tool
     virtual int main() = 0;
-
-    /// Initialize and run, returning the return code
-    virtual int run(int argc, const char* argv[]);
 };
 
 }
