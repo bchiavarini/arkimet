@@ -89,10 +89,19 @@ struct ArkiQueryCommandLine : public runtime::CommandLine
 struct ArkiQuery : public runtime::ArkiTool
 {
     ArkiQueryCommandLine args;
+    std::string qmacro;
+    bool merged;
+
+    void configure(ArkiQueryCommandLine& args)
+    {
+        ArkiTool::configure(args);
+        qmacro = args.qmacro->stringValue();
+        merged = args.merged->boolValue();
+    }
 
     Matcher make_query() override
     {
-        if (args.qmacro->isSet())
+        if (!qmacro.empty())
             return Matcher::parse("");
 
         // Resolve the query on each server (including the local system, if
@@ -148,7 +157,7 @@ struct ArkiQuery : public runtime::ArkiTool
     int main() override
     {
         bool all_successful = true;
-        if (args.merged->boolValue())
+        if (merged)
         {
             dataset::Merged merger;
             size_t dscount = input_info.sectionSize();
@@ -173,17 +182,17 @@ struct ArkiQuery : public runtime::ArkiTool
 
             for (size_t i = 0; i < dscount; ++i)
                 close_source(move(datasets[i]), all_successful);
-        } else if (args.qmacro->isSet()) {
+        } else if (!qmacro.empty()) {
             // Create the virtual qmacro dataset
             ConfigFile cfg;
             unique_ptr<dataset::Reader> ds = runtime::make_qmacro_dataset(
                     cfg,
                     input_info,
-                    args.qmacro->stringValue(),
+                    qmacro,
                     args.strquery);
 
             // Perform the query
-            all_successful = process_source(*ds, args.qmacro->stringValue());
+            all_successful = process_source(*ds, qmacro);
         } else {
             // Query all the datasets in sequence
             for (ConfigFile::const_section_iterator i = input_info.sectionBegin();
