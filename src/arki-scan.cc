@@ -180,7 +180,6 @@ static std::string moveFile(const dataset::Reader& ds, const std::string& target
 
 struct ArkiScan : public runtime::ArkiTool
 {
-    ArkiScanCommandLine args;
     runtime::MetadataDispatch* dispatcher = nullptr;
     std::string moveok;
     std::string moveko;
@@ -189,11 +188,6 @@ struct ArkiScan : public runtime::ArkiTool
     ~ArkiScan()
     {
         delete dispatcher;
-    }
-
-    ArkiScanCommandLine* get_cmdline_parser() override
-    {
-        return &args;
     }
 
     void configure(ArkiScanCommandLine& args)
@@ -272,16 +266,17 @@ struct ArkiScan : public runtime::ArkiTool
 int main(int argc, const char* argv[])
 {
     runtime::init();
-    ArkiScan tool;
+    ArkiScanCommandLine args;
     try {
-        tool.args.parse_all(argc, argv);
-        tool.configure(tool.args);
+        args.parse_all(argc, argv);
+        ArkiScan tool;
+        tool.configure(args);
         return tool.main();
     } catch (runtime::HandledByCommandLineParser& e) {
         return e.status;
     } catch (commandline::BadOption& e) {
         cerr << e.what() << endl;
-        tool.args.outputHelp(cerr);
+        args.outputHelp(cerr);
         return 1;
     } catch (std::exception& e) {
         cerr << e.what() << endl;

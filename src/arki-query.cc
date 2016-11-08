@@ -90,11 +90,6 @@ struct ArkiQuery : public runtime::ArkiTool
 {
     ArkiQueryCommandLine args;
 
-    ArkiQueryCommandLine* get_cmdline_parser() override
-    {
-        return &args;
-    }
-
     Matcher make_query() override
     {
         if (args.qmacro->isSet())

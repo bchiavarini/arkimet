@@ -95,8 +95,6 @@ struct ArkiTool
 
     ~ArkiTool();
 
-    virtual CommandLine* get_cmdline_parser() = 0;
-
     /// Read parsed command line arguments and setup the tool for running
     void configure(CommandLine& args);
 
