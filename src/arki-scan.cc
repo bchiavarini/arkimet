@@ -21,6 +21,7 @@ using namespace arki;
 using namespace arki::utils;
 
 namespace {
+struct ArkiScan;
 
 struct ArkiScanCommandLine : public runtime::CommandLine
 {
@@ -157,6 +158,8 @@ struct ArkiScanCommandLine : public runtime::CommandLine
 
         return dispatcher;
     }
+
+    void configure(ArkiScan& tool);
 };
 
 static std::string moveFile(const std::string& source, const std::string& targetdir)
@@ -195,9 +198,6 @@ struct ArkiScan : public runtime::ArkiTool
         ArkiTool::configure(args);
         auto d = args.make_dispatcher(*processor);
         if (d) dispatcher = d.release();
-        moveok = args.moveok->stringValue();
-        moveko = args.moveko->stringValue();
-        movework = args.movework->stringValue();
     }
 
     std::unique_ptr<dataset::Reader> open_source(ConfigFile& info) override
@@ -261,6 +261,14 @@ struct ArkiScan : public runtime::ArkiTool
     }
 };
 
+void ArkiScanCommandLine::configure(ArkiScan& tool)
+{
+    CommandLine::configure(tool);
+    tool.moveok = moveok->stringValue();
+    tool.moveko = moveko->stringValue();
+    tool.movework = movework->stringValue();
+}
+
 }
 
 int main(int argc, const char* argv[])
@@ -270,6 +278,7 @@ int main(int argc, const char* argv[])
     try {
         args.parse_all(argc, argv);
         ArkiScan tool;
+        args.configure(tool);
         tool.configure(args);
         return tool.main();
     } catch (runtime::HandledByCommandLineParser& e) {

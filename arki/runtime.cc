@@ -213,6 +213,23 @@ ConfigFile CommandLine::get_inputs()
     return input_info;
 }
 
+void CommandLine::configure(ArkiTool& tool)
+{
+    // Initialize the processor maker
+    tool.pmaker.summary = summary->boolValue();
+    tool.pmaker.summary_short = summary_short->boolValue();
+    tool.pmaker.yaml = yaml->boolValue();
+    tool.pmaker.json = json->boolValue();
+    tool.pmaker.annotate = annotate->boolValue();
+    tool.pmaker.data_only = dataOnly->boolValue();
+    tool.pmaker.data_inline = dataInline->boolValue();
+    tool.pmaker.postprocess = postprocess->stringValue();
+    tool.pmaker.report = report->stringValue();
+    tool.pmaker.summary_restrict = summary_restrict->stringValue();
+    tool.pmaker.sort = sort->stringValue();
+    tool.pmaker.targetfile = targetfile->stringValue();
+}
+
 ArkiTool::~ArkiTool()
 {
     delete processor;
@@ -221,20 +238,6 @@ ArkiTool::~ArkiTool()
 
 void ArkiTool::configure(CommandLine& args)
 {
-    // Initialize the processor maker
-    pmaker.summary = args.summary->boolValue();
-    pmaker.summary_short = args.summary_short->boolValue();
-    pmaker.yaml = args.yaml->boolValue();
-    pmaker.json = args.json->boolValue();
-    pmaker.annotate = args.annotate->boolValue();
-    pmaker.data_only = args.dataOnly->boolValue();
-    pmaker.data_inline = args.dataInline->boolValue();
-    pmaker.postprocess = args.postprocess->stringValue();
-    pmaker.report = args.report->stringValue();
-    pmaker.summary_restrict = args.summary_restrict->stringValue();
-    pmaker.sort = args.sort->stringValue();
-    pmaker.targetfile = args.targetfile->stringValue();
-
     // Run here a consistency check on the processor maker configuration
     std::string errors = pmaker.verify_option_consistency();
     if (!errors.empty())

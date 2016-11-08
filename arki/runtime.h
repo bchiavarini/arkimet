@@ -20,6 +20,7 @@ class Summary;
 class Formatter;
 
 namespace runtime {
+struct ArkiTool;
 
 /**
  * Initialise the libraries that we use and parse the matcher alias database.
@@ -84,6 +85,8 @@ struct CommandLine : public utils::commandline::StandardParserWithManpage
     void parse_all(int argc, const char* argv[]);
 
     virtual ConfigFile get_inputs();
+
+    void configure(ArkiTool& tool);
 };
 
 struct ArkiTool

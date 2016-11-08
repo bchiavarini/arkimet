@@ -16,6 +16,7 @@ using namespace arki;
 using namespace arki::utils;
 
 namespace {
+struct ArkiQuery;
 
 struct ArkiQueryCommandLine : public runtime::CommandLine
 {
@@ -84,6 +85,8 @@ struct ArkiQueryCommandLine : public runtime::CommandLine
 
         return cfg;
     }
+
+    void configure(ArkiQuery& tool);
 };
 
 struct ArkiQuery : public runtime::ArkiTool
@@ -91,14 +94,6 @@ struct ArkiQuery : public runtime::ArkiTool
     std::string qmacro;
     bool merged;
     std::string strquery;
-
-    void configure(ArkiQueryCommandLine& args)
-    {
-        ArkiTool::configure(args);
-        qmacro = args.qmacro->stringValue();
-        merged = args.merged->boolValue();
-        strquery = args.strquery;
-    }
 
     Matcher make_query() override
     {
@@ -213,9 +208,16 @@ struct ArkiQuery : public runtime::ArkiTool
             return 0;
         else
             return 2;
-        //return summary.count() > 0 ? 0 : 1;
     }
 };
+
+void ArkiQueryCommandLine::configure(ArkiQuery& tool)
+{
+    CommandLine::configure(tool);
+    tool.qmacro = qmacro->stringValue();
+    tool.merged = merged->boolValue();
+    tool.strquery = strquery;
+}
 
 }
 
@@ -226,6 +228,7 @@ int main(int argc, const char* argv[])
     try {
         args.parse_all(argc, argv);
         ArkiQuery tool;
+        args.configure(tool);
         tool.configure(args);
         return tool.main();
     } catch (runtime::HandledByCommandLineParser& e) {
