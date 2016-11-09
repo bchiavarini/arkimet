@@ -104,10 +104,11 @@ nobase_dist_arkiinclude_HEADERS = \
 		nag.h \
 		postprocess.h \
 		querymacro.h \
-		runtime/config.h \
 		runtime.h \
+		runtime/config.h \
 		runtime/io.h \
 		runtime/processor.h \
+		runtime/arkiquery.h \
 		scan/any.h \
 		scan/dir.h \
 		sort.h \
@@ -279,6 +280,7 @@ libarkimet_la_SOURCES += \
 		matcher/quantity.cc \
 		runtime/config.cc \
 		runtime/io.cc \
+		runtime/arkiquery.cc \
 		types-init.cc
 
 libarkimet_test_la_SOURCES += \
@@ -426,7 +428,8 @@ tests_arki_test_SOURCES += \
 		scan/any-tut.cc \
 		scan/dir-test.cc \
 		runtime/io-tut.cc \
-		runtime/config-tut.cc
+		runtime/config-tut.cc \
+		runtime/arkiquery-test.cc
 
 if GRIBAPI
 nobase_dist_arkiinclude_HEADERS += scan/grib.h
