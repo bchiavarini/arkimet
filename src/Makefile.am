@@ -69,4 +69,4 @@ check-local:
 test_src_SOURCES = arki-server-test.cc
 test_src_LDADD = $(all_libs) ../arki/libarkimet-test.la
 
-EXTRA_DIST = testlib.sh $(test_scripts)
+EXTRA_DIST = testlib.sh $(test_scripts) arki-query.py
