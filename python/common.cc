@@ -472,8 +472,15 @@ int configfile_from_python(PyObject* o, ConfigFile& out)
             {
                 string k, v;
                 if (string_from_python(key, k)) return -1;
-                if (string_from_python(val, v)) return -1;
-                out.setValue(k, v);
+                if (PyDict_Check(val))
+                {
+                    ConfigFile section;
+                    configfile_from_python(val, section);
+                    out.mergeInto(k, section);
+                } else {
+                    if (string_from_python(val, v)) return -1;
+                    out.setValue(k, v);
+                }
             }
             return 0;
         }

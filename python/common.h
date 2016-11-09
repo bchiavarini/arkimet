@@ -182,7 +182,8 @@ int string_from_python(PyObject* o, std::string& out);
  *
  * Currently this only supports:
  *  - str or bytes, that will get parsed by ConfigFile.
- *  - dict, that will be set as key->val into out
+ *  - { str(key): str(val) }, that will be set as key->val into out
+ *  - { str(section): { str(key): str(val) } }, that will be added as a new section into out
  *
  * In the future it can support reading data from a ConfigFile object.
  */

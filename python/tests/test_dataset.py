@@ -162,3 +162,27 @@ type = file
         # No arguments
         ds.query_data(on_metadata=count_results)
         self.assertEquals(count, 1)
+
+        # Try again using a dict of dicts as config
+        ds = arki.make_qmacro_dataset(
+            {},
+            {
+                "test200": {
+                    "format": "grib",
+                    "name": "test.grib1",
+                    "path": "inbound/test.grib1",
+                    "type": "file",
+                },
+            },
+            "expa 2007-07-08",
+            "ds:test200. d:@. t:1300. s:GRIB1/0/0h/0h. l:GRIB1/1. v:GRIB1/200/140/229.\n",
+        )
+
+        count = 0
+        def count_results(md):
+            nonlocal count
+            count += 1
+
+        # No arguments
+        ds.query_data(on_metadata=count_results)
+        self.assertEquals(count, 1)
