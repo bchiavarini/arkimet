@@ -177,12 +177,7 @@ type = file
             "expa 2007-07-08",
             "ds:test200. d:@. t:1300. s:GRIB1/0/0h/0h. l:GRIB1/1. v:GRIB1/200/140/229.\n",
         )
-
-        count = 0
-        def count_results(md):
-            nonlocal count
-            count += 1
-
         # No arguments
+        count = 0
         ds.query_data(on_metadata=count_results)
         self.assertEquals(count, 1)
