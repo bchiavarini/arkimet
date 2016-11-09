@@ -165,6 +165,44 @@ static PyObject* arkipy_arki_query(arkipy_Metadata* self, PyObject *args, PyObje
     } ARKI_CATCH_RETURN_PYO
 }
 
+static PyObject* dict_from_config_section(ConfigFile& cfg)
+{
+    try {
+        pyo_unique_ptr res(PyDict_New());
+        for (const auto& i: cfg)
+        {
+            pyo_unique_ptr val(PyUnicode_FromStringAndSize(i.second.data(), i.second.size()));
+            if (!val) return nullptr;
+
+            if (PyDict_SetItemString(res, i.first.c_str(), val.release()))
+                return nullptr;
+        }
+        return res.release();
+    } ARKI_CATCH_RETURN_PYO
+}
+
+static PyObject* arkipy_read_config(PyTypeObject *type, PyObject *args)
+{
+    const char* pathname;
+    if (!PyArg_ParseTuple(args, "s", &pathname))
+        return nullptr;
+
+    try {
+        ConfigFile cfg;
+        dataset::Reader::readConfig(pathname, cfg);
+        pyo_unique_ptr res(PyDict_New());
+
+        for (auto i = cfg.sectionBegin(); i != cfg.sectionEnd(); ++i)
+        {
+            pyo_unique_ptr val(dict_from_config_section(*i->second));
+            if (PyDict_SetItemString(res, i->first.c_str(), val.release()))
+                return nullptr;
+        }
+
+        return res.release();
+    } ARKI_CATCH_RETURN_PYO
+}
+
 static PyMethodDef arkimet_methods[] = {
     { "expand_query", (PyCFunction)arkipy_expand_query, METH_VARARGS, "Return the same text query with all aliases expanded" },
     { "matcher_alias_database", (PyCFunction)arkipy_matcher_alias_database, METH_NOARGS, "Return a string with the current matcher alias database" },
@@ -205,6 +243,7 @@ static PyMethodDef arkimet_methods[] = {
           targetfile
           qmacro
         )" },
+    { "read_config", (PyCFunction)arkipy_read_config, METH_VARARGS, "Read the configuration of a dataset given its pathname, and return it as a dict" },
     { NULL }
 };
 
