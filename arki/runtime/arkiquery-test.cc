@@ -52,7 +52,7 @@ add_method("simple", [](Fixture& f) {
 });
 
 // Export only data
-add_method("simple", [](Fixture& f) {
+add_method("data", [](Fixture& f) {
     ArkiQuery query;
     dataset::Reader::readConfig("testds", query.input_info);
     query.set_query("");
