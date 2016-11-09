@@ -258,6 +258,7 @@ void DatasetTest::clean()
 {
     if (sys::exists(ds_root)) sys::rmtree(ds_root);
     sys::mkdir_ifmissing(ds_root);
+    sys::write_file(str::joinpath(ds_root, "config"), cfg.serialize());
 }
 
 void DatasetTest::import(const std::string& testfile)
