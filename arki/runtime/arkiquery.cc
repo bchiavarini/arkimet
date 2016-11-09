@@ -8,6 +8,13 @@ using namespace std;
 namespace arki {
 namespace runtime {
 
+void ArkiQuery::print_config(FILE* out) const
+{
+    ArkiTool::print_config(out);
+    fprintf(out, "qmacro: %s\n", qmacro.c_str());;
+    fprintf(out, "merged: %s\n", merged ? "true" : "false");
+}
+
 void ArkiQuery::set_query(const std::string& strquery)
 {
     if (!qmacro.empty())

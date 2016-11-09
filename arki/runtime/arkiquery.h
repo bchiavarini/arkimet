@@ -14,6 +14,8 @@ struct ArkiQuery : public runtime::ArkiTool
 
     void set_query(const std::string& strquery) override;
 
+    void print_config(FILE* out) const override;
+
     int main() override;
 };
 

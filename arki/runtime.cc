@@ -251,6 +251,24 @@ ArkiTool::~ArkiTool()
     delete output;
 }
 
+void ArkiTool::print_config(FILE* out) const
+{
+    fprintf(out, "query: %s\n", strquery.c_str());
+    fprintf(out, "output: %s\n", output ? output->name().c_str() : "(unset)");
+    fprintf(out, "summary: %s\n", pmaker.summary ? "true" : "false");
+    fprintf(out, "summary-short: %s\n", pmaker.summary_short ? "true" : "false");
+    fprintf(out, "yaml: %s\n", pmaker.yaml ? "true" : "false");
+    fprintf(out, "json: %s\n", pmaker.json ? "true" : "false");
+    fprintf(out, "annotate: %s\n", pmaker.annotate ? "true" : "false");
+    fprintf(out, "data_only: %s\n", pmaker.data_only ? "true" : "false");
+    fprintf(out, "data_inline: %s\n", pmaker.data_inline ? "true" : "false");
+    fprintf(out, "postprocess: %s\n", pmaker.postprocess.c_str());
+    fprintf(out, "report: %s\n", pmaker.report.c_str());
+    fprintf(out, "summary-restrict: %s\n", pmaker.summary_restrict.c_str());
+    fprintf(out, "sort: %s\n", pmaker.sort.c_str());
+    fprintf(out, "targetfile: %s\n", pmaker.targetfile.c_str());
+}
+
 void ArkiTool::set_output(const std::string& pathname)
 {
     // Open output stream

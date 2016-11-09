@@ -100,6 +100,8 @@ struct ArkiTool
 
     ~ArkiTool();
 
+    virtual void print_config(FILE* out) const;
+
     /// Set the output file name
     void set_output(const std::string& pathname);
 
